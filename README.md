@@ -2,20 +2,16 @@
 Barcode-free self-checkout kiosk for grocery stores, powered by computer vision.
 
 ## Overview
-
 Shoppers place items on the checkout surface, a camera identifies each one,
-and the kiosk builds the order and total automatically. No barcode scanning.
-Inspired by the Uniqlo and H&M self-checkout kiosks.
+and the kiosk builds the order and total automatically.
 
 ## Features
-
 - Real-time detection and recognition of grocery items
 - Automatic cart building and price calculation
 - Touchscreen kiosk interface
 - (add more as you build them)
 
 ## How It Works
-
 1. Camera captures the checkout surface
 2. YOLO26 detects and classifies items
 3. Backend matches detections to products and prices
@@ -23,21 +19,19 @@ Inspired by the Uniqlo and H&M self-checkout kiosks.
 5. Shopper confirms and pays
 
 ## Tech Stack
-
 | Layer    | Tech                          |
 |----------|-------------------------------|
-| Frontend | (React / Next.js / etc.)      |
-| Backend  | (FastAPI / Flask / Node, etc.)|
+| Frontend | Svelte                        |
+| Backend  | FastAPI                       |
 | ML       | YOLO26, PyTorch               |
-| Cloud    | (AWS / GCP / Azure)           |
+| Cloud    | GCP                           |
 
 ## Getting Started
 
 ### Prerequisites
-
 - Python 3.x
 - Node.js x.x
-- (GPU / CUDA if needed)
+- GPU / CUDA if needed
 
 ### Installation
 
@@ -57,7 +51,6 @@ npm install
 ```
 
 ### Running Locally
-
 ```bash
 # backend
 cd backend && uvicorn app.main:app --reload
@@ -67,22 +60,18 @@ cd frontend && npm run dev
 ```
 
 ## Project Structure
-
 See [docs/architecture.md](docs/architecture.md) for details.
 
 ## Model and Data
-
 - **Model:** YOLO26 fine-tuned on (dataset name)
 - **Classes:** (number and examples)
 - **Dataset:** (source, size, license)
 - **Weights:** (download link or script)
 
 ## Design
-
 Figma prototype: (link)
 
 ## Roadmap
-
 - [x] Figma prototype
 - [ ] Baseline detection model
 - [ ] Backend API
@@ -91,15 +80,12 @@ Figma prototype: (link)
 - [ ] Payment integration
 
 ## Team
-
 - Name, role
 - Name, role
 
 ## License
-
 Distributed under the (MIT) License. See `LICENSE` for details.
 
 ## Acknowledgments
-
 - Ultralytics YOLO
 - (datasets, libraries, tutorials)
