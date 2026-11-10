@@ -1,9 +1,5 @@
 # Vision Self-Checkout
-
 Barcode-free self-checkout kiosk for grocery stores, powered by computer vision.
-
-![Demo](docs/demo.gif)
-<!-- Add a screenshot or GIF once you have one -->
 
 ## Overview
 
