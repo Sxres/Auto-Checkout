@@ -1,0 +1,22 @@
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Frontend
+node_modules/
+dist/
+
+# ML experiments and model weights
+.ipynb_checkpoints/
+/ml/runs/
+/ml/weights/
+*.pt
+*.onnx

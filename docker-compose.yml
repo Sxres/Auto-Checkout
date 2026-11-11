@@ -1,0 +1,13 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: infra/backend.Dockerfile
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/frontend.Dockerfile
+    ports:
+      - "127.0.0.1:${KIOSK_PORT:-5173}:80"
