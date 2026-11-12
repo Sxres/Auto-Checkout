@@ -15,16 +15,13 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            backend/requirements.txt
-            backend/requirements-dev.txt
-      - run: python -m pip install -r requirements-dev.txt
-      - run: python -m ruff check .
-      - run: python -m pytest
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run python -m pytest
 
   frontend:
     runs-on: ubuntu-latest
