@@ -35,17 +35,17 @@ docker compose up --build
 
 The kiosk opens at [localhost:5173](http://localhost:5173). The API health check is at [localhost:8000/health](http://localhost:8000/health). Adjust the ports in the local environment file if needed.
 
-### With Python and Node.js
+### With uv and Node.js
 
-Use Python 3.12 and Node.js 22.12 or later. From the repository root, start the API in one terminal.
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and Node.js 22.12 or later. From the repository root, start the API in one terminal. The Python version is pinned in `.python-version`; uv fetches it automatically if it is not already installed.
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r backend/requirements-dev.txt
+uv sync
 cd backend
-python -m uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload
 ```
+
+`uv sync` creates the virtual environment and installs everything from `uv.lock`. Add dependencies with `uv add <package>` (or `uv add --dev <package>` for development tools).
 
 Start the kiosk in a second terminal.
 
@@ -74,8 +74,8 @@ After installing the backend and frontend dependencies, run these commands from 
 
 ```bash
 cd backend
-python -m ruff check .
-python -m pytest
+uv run ruff check .
+uv run python -m pytest
 cd ../frontend
 npm run build
 ```
