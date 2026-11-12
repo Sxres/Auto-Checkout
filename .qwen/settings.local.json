@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /home/passdaboof/Documents/Auto-Checkout/frontend && cat package.json && ls node_modules/.bin/ 2>/dev/null | head -20)",
+      "Bash(npm run build 2>&1 | tail -30)",
+      "Bash(npm run build 2>&1 | tail -25)",
+      "Bash(ls /home/passdaboof/.cache/ms-playwright/ && ls /home/passdaboof/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/ 2>/dev/null | head)",
+      "Read(//home/passdaboof/.cache/ms-playwright/**)",
+      "Bash(nohup npm run dev -- --port 5199 --strictPort > /tmp/avc-dev.log 2>&1 & sleep 3; tail -5 /tmp/avc-dev.log)"
+    ]
+  }
+}
