@@ -1,98 +1,77 @@
-<main>
-  <header>
-    <p class="eyebrow">Self-checkout</p>
-    <h1>Auto Vision Checkout</h1>
-  </header>
+<script>
+  import Stage from './lib/Stage.svelte'
+  import Icon from './lib/Icon.svelte'
+  import Landing from './components/Landing.svelte'
+  import Shell from './components/manager/Shell.svelte'
+  import Kiosk from './components/kiosk/Kiosk.svelte'
+  import Complete from './components/Complete.svelte'
+  import { app, dismissToast, loadWorkspace } from './lib/state.svelte.js'
 
-  <div class="checkout">
-    <section class="camera" aria-label="Camera preview">
-      <p>Camera preview</p>
-    </section>
+  loadWorkspace()
+</script>
 
-    <section class="basket" aria-labelledby="basket-heading">
-      <h2 id="basket-heading">Your items</h2>
-      <p>Your basket is empty.</p>
-      <div class="total">
-        <span>Total</span>
-        <strong>$0.00</strong>
-      </div>
-    </section>
-  </div>
-</main>
+<Stage>
+  {#if app.view === 'landing'}
+    <Landing />
+  {:else if app.view === 'manager'}
+    <Shell />
+  {:else if app.view === 'kiosk'}
+    <Kiosk />
+  {:else}
+    <Complete />
+  {/if}
+
+  {#if app.toast}
+    <div class="toast" role="status">
+      <span>{app.toast.message}</span>
+      {#if app.toast.action}
+        <button
+          class="toast-action"
+          onclick={() => {
+            app.toast.action.run()
+            dismissToast()
+          }}>{app.toast.action.label}</button
+        >
+      {/if}
+      <button class="toast-close" onclick={dismissToast} aria-label="Dismiss">
+        <Icon name="x" size={14} />
+      </button>
+    </div>
+  {/if}
+</Stage>
 
 <style>
-  :global(*) {
-    box-sizing: border-box;
-  }
-
-  :global(body) {
-    margin: 0;
-    background: #f2f3f5;
-    color: #20242a;
-    font-family: system-ui, sans-serif;
-  }
-
-  main {
-    width: min(calc(100% - 2rem), 74rem);
-    margin-inline: auto;
-    padding-block: clamp(1.5rem, 5vw, 4rem);
-  }
-
-  h1,
-  h2,
-  p {
-    margin: 0;
-  }
-
-  h1 {
-    margin-block: 0.4rem;
-    font-size: clamp(1.75rem, 5vw, 3rem);
-  }
-
-  .eyebrow {
-    font-size: 0.875rem;
-    font-weight: 650;
-  }
-
-  .checkout {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 1rem;
-    margin-top: 1.75rem;
-  }
-
-  .camera,
-  .basket {
-    border-radius: 0.75rem;
-    padding: 1.25rem;
-  }
-
-  .camera {
-    display: grid;
-    min-height: clamp(14rem, 43vw, 28rem);
-    place-items: center;
-    background: #242931;
-    color: #f2f3f5;
-  }
-
-  .basket {
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    gap: 1rem;
-    background: #fff;
-  }
-
-  .total {
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
     display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    border-top: 1px solid #d9dde3;
-    padding-top: 1rem;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: var(--dark);
+    color: var(--surface);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 8px 24px rgba(23, 23, 23, 0.28);
+    z-index: 200;
+    animation: fadeUp 0.22s ease both;
   }
-
-  @media (max-width: 40rem) {
-    .checkout {
-      grid-template-columns: 1fr;
-    }
+  .toast-action {
+    color: var(--white);
+    font-weight: 700;
+    font-size: 13px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .toast-close {
+    display: inline-flex;
+    color: var(--bg);
+    opacity: 0.8;
+  }
+  .toast-close:hover {
+    opacity: 1;
   }
 </style>

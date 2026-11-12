@@ -1,0 +1,279 @@
+:root {
+  --bg: #cdd1ca;
+  --surface: #e2e5de;
+  --border: #b8beb4;
+  --ink: #171717;
+  --dark: #2a2a29;
+  --dark2: #41433f;
+  --red: #d4402b;
+  --muted: #565c53;
+  --chip: #d6dbd2;
+  --green-bg: #dce5d5;
+  --amber-bg: #efe1c8;
+  --amber: #815125;
+  --green: #3f5c42;
+  --cam: #343633;
+  --cam-border: #6a7065;
+  --disabled: #bfc5ba;
+  --beige: #dfded9;
+  --dot-green: #c8d7b9;
+  --white: #ffffff;
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+input {
+  caret-color: var(--red);
+}
+
+::selection {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+/* Scrollbars in the artifact's own palette */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+  border: 2px solid var(--surface);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.btn-red {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--red);
+  color: var(--white);
+  border-radius: 8px;
+  font-weight: 700;
+  transition: filter 0.15s ease, transform 0.05s ease;
+}
+.btn-red:hover {
+  filter: brightness(1.06);
+}
+.btn-red:active {
+  transform: translateY(1px);
+}
+.btn-red:disabled {
+  background: var(--disabled);
+  cursor: default;
+  filter: none;
+  transform: none;
+}
+
+.btn-line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  font-weight: 700;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+.btn-line:hover {
+  background: var(--chip);
+}
+.btn-line:active {
+  transform: translateY(1px);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 999px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pill-green {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.pill-amber {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+.pill-gray {
+  background: var(--chip);
+  color: var(--muted);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--chip);
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.field::placeholder {
+  color: var(--ink);
+  font-weight: 400;
+  opacity: 1;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 24px;
+}
+.empty-state .icon-chip {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  margin-bottom: 14px;
+}
+.empty-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.empty-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 360px;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
