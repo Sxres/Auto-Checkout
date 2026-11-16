@@ -66,7 +66,12 @@
     </nav>
 
     <div class="side-bottom">
-      <div class="status-card" class:offline={!app.kioskStatus.online}>
+      <button
+        class="status-card"
+        class:offline={!app.kioskStatus.online}
+        onclick={() => go('manager', 'monitoring')}
+        title="Open monitoring"
+      >
         <span class="status-dot"></span>
         <div class="status-text">
           <span class="status-title">{app.kioskStatus.online ? 'Kiosk online' : 'Kiosk offline'}</span>
@@ -74,7 +79,7 @@
             {app.kioskStatus.cameraConnected ? 'Camera connected' : 'Camera not connected'}
           </span>
         </div>
-      </div>
+      </button>
 
       <div class="side-divider"></div>
 
@@ -92,7 +97,7 @@
   <!-- Topbar -->
   <header class="topbar">
     <div class="crumb">
-      <span class="crumb-ws">Workspace</span>
+      <button class="crumb-ws" onclick={() => go('manager', 'overview')} title="Back to overview">Workspace</button>
       <span class="crumb-sep">/</span>
       <span class="crumb-page">{titles[app.page]}</span>
     </div>
@@ -269,6 +274,11 @@
     align-items: center;
     gap: 12px;
     padding: 0 16px;
+    text-align: left;
+    transition: filter 0.15s ease;
+  }
+  .status-card:hover {
+    filter: brightness(1.12);
   }
   .status-dot {
     width: 7px;
@@ -366,7 +376,7 @@
   .crumb {
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: 10px;
     font-size: 13px;
     line-height: 1;
     min-width: 0;
@@ -375,8 +385,15 @@
   .crumb-sep {
     color: var(--muted);
   }
+  .crumb-ws {
+    transition: color 0.15s ease;
+  }
+  .crumb-ws:hover {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
   .crumb-page {
-    margin-left: 18px;
     font-weight: 700;
     color: var(--ink);
     white-space: nowrap;

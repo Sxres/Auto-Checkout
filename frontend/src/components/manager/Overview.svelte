@@ -6,14 +6,15 @@
   const activeAlerts = $derived(app.alerts.filter((a) => a.status === 'Active').length)
 
   const stats = $derived([
-    { label: 'Checkouts today', value: String(app.metrics.checkoutsToday), delta: 'No data yet', tone: 'muted', icon: 'basket' },
-    { label: 'Recognition rate', value: app.metrics.recognitionRate ?? '—', delta: 'No data yet', tone: 'muted', icon: 'eye' },
+    { label: 'Checkouts today', value: String(app.metrics.checkoutsToday), delta: 'No data yet', tone: 'muted', icon: 'basket', page: 'monitoring' },
+    { label: 'Recognition rate', value: app.metrics.recognitionRate ?? '—', delta: 'No data yet', tone: 'muted', icon: 'eye', page: 'monitoring' },
     {
       label: 'Waiting for review',
       value: String(app.review.length),
       delta: app.review.length ? 'Needs a human check' : 'Queue is clear',
       tone: app.review.length ? 'amber' : 'muted',
       icon: 'inbox',
+      page: 'review',
     },
     {
       label: 'Avg. checkout time',
@@ -21,6 +22,7 @@
       delta: 'No data yet',
       tone: 'muted',
       icon: 'clock',
+      page: 'monitoring',
     },
   ])
 
@@ -33,13 +35,15 @@
       label: 'Camera',
       value: app.kioskStatus.cameraConnected ? 'Connected' : 'Not connected',
       ok: app.kioskStatus.cameraConnected,
+      page: 'monitoring',
     },
-    { icon: 'box', label: 'Current version', value: live?.v ?? '—', ok: !!live },
+    { icon: 'box', label: 'Current version', value: live?.v ?? '—', ok: !!live, page: 'retraining' },
     {
       icon: 'checkCircle',
       label: 'Products ready',
       value: `${readyCount} of ${app.products.length}`,
       ok: app.products.length > 0 && needCount === 0,
+      page: 'catalog',
     },
   ])
   const statusNote = $derived(
@@ -72,12 +76,13 @@
   <!-- Stat cards -->
   <div class="stats">
     {#each stats as s}
-      <div class="card stat">
+      <button class="card stat" onclick={() => go('manager', s.page)} title="Open {s.page}">
         <span class="stat-label">{s.label}</span>
         <span class="stat-value tnum">{s.value}</span>
         <span class="stat-delta {s.tone}">{s.delta}</span>
         <span class="icon-chip stat-icon"><Icon name={s.icon} size={14} /></span>
-      </div>
+        <span class="stat-go"><Icon name="chevronRight" size={14} /></span>
+      </button>
     {/each}
   </div>
 
@@ -132,11 +137,12 @@
         {app.kioskStatus.online ? 'Online' : 'Offline'}
       </span>
       {#each statusRows as r, i}
-        <div class="status-row" style="top: {70 + i * 46}px">
+        <button class="status-row" style="top: {62 + i * 46}px" onclick={() => go('manager', r.page)} title="Open {r.page}">
           <span class="row-icon" class:ok={r.ok}><Icon name={r.icon} size={16} /></span>
           <span class="row-label">{r.label}</span>
           <span class="row-value tnum">{r.value}</span>
-        </div>
+          <span class="row-go"><Icon name="chevronRight" size={13} /></span>
+        </button>
       {/each}
       <div class="divider status-divider"></div>
       <span class="status-note">{statusNote}</span>
@@ -205,6 +211,28 @@
   .stat {
     position: relative;
     height: 128px;
+    text-align: left;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .stat:hover {
+    transform: translateY(-2px);
+    border-color: var(--muted);
+    box-shadow: 0 8px 18px rgba(23, 23, 23, 0.1);
+  }
+  .stat-go {
+    position: absolute;
+    right: 20px;
+    bottom: 16px;
+    display: flex;
+    color: var(--muted);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .stat:hover .stat-go,
+  .stat:focus-visible .stat-go {
+    opacity: 1;
+    transform: translateX(0);
   }
   .stat-label {
     position: absolute;
@@ -372,11 +400,29 @@
   }
   .status-row {
     position: absolute;
-    left: 25px;
-    right: 25px;
-    height: 16px;
+    left: 17px;
+    right: 17px;
+    height: 32px;
+    padding: 0 8px;
     display: flex;
     align-items: center;
+    border-radius: 8px;
+    text-align: left;
+    transition: background 0.15s ease;
+  }
+  .status-row:hover {
+    background: var(--chip);
+  }
+  .row-go {
+    display: flex;
+    margin-left: 6px;
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  .status-row:hover .row-go,
+  .status-row:focus-visible .row-go {
+    opacity: 1;
   }
   .row-icon {
     display: flex;

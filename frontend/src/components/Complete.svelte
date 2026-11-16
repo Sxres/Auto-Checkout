@@ -1,11 +1,11 @@
 <script>
-  import Icon from '../lib/Icon.svelte'
+  import Mascot from '../lib/Mascot.svelte'
   import { app, startCheckout } from '../lib/state.svelte.js'
   import { money } from '../lib/data.js'
 </script>
 
 <div class="complete">
-  <span class="check-circle"><Icon name="check" size={32} stroke={2.5} /></span>
+  <span class="mascot-stage"><Mascot mood="cheer" size={21} /></span>
   <h1 class="title">You're all set.</h1>
   <p class="subtitle">Your items have been confirmed.</p>
   <p class="total tnum">{money(app.lastTotal)}</p>
@@ -24,20 +24,18 @@
     padding: 32px;
     overflow-y: auto;
   }
-  .check-circle {
-    width: 72px;
-    height: 72px;
+  .mascot-stage {
+    width: 152px;
+    height: 152px;
     flex-shrink: 0;
-    border-radius: 50%;
+    border-radius: 44px;
     background: var(--green-bg);
-    color: var(--ink);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
     animation: popIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .title {
-    margin-top: 16px;
+    margin-top: 20px;
     font-size: 42px;
     line-height: 1;
     font-weight: 700;
@@ -45,21 +43,21 @@
     animation: fadeUp 0.4s ease 0.08s both;
   }
   .subtitle {
-    margin-top: 39px;
+    margin-top: 14px;
     font-size: 18px;
     line-height: 1;
     color: var(--ink);
     animation: fadeUp 0.4s ease 0.16s both;
   }
   .total {
-    margin-top: 27px;
+    margin-top: 18px;
     font-size: 30px;
     line-height: 1;
     font-weight: 700;
     animation: fadeUp 0.4s ease 0.24s both;
   }
   .again-btn {
-    margin-top: 36px;
+    margin-top: 32px;
     width: 360px;
     max-width: 100%;
     height: 64px;
