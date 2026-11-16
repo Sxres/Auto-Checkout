@@ -1,13 +1,14 @@
 <script>
   import { onMount } from 'svelte'
   import Icon from '../../lib/Icon.svelte'
+  import Mascot from '../../lib/Mascot.svelte'
   import ProductArt from '../../lib/ProductArt.svelte'
+  import HelpChat from './HelpChat.svelte'
   import {
     app,
     go,
     cartCount,
     cartTotal,
-    recognize,
     setQty,
     removeItem,
     confirmCheckout,
@@ -81,14 +82,13 @@
 
   const count = $derived(cartCount())
   const total = $derived(cartTotal())
-  const canRecognize = $derived(cameraState === 'live' && app.phase === 'empty')
   const statusText = $derived.by(() => {
     if (cameraState === 'starting') return 'Connecting to your camera…'
     if (cameraState === 'error') return 'Camera unavailable. Check access and try again.'
     if (cameraState === 'idle') return 'Start the camera to begin your checkout.'
     if (app.phase === 'items') return `${count} item${count === 1 ? '' : 's'} recognized. Ready for your next item.`
     if (app.phase === 'recognizing') return 'Recognizing your items…'
-    return 'Ready to scan. Place your first item in view.'
+    return null
   })
 
   $effect(() => {
@@ -101,143 +101,156 @@
 </script>
 
 <div class="kiosk">
-  <div class="main">
-    <!-- Camera -->
-    <div class="camera-card">
-      <div class="cam-head">
-        <span class="cam-icon"><Icon name="camera" size={16} /></span>
-        <h1 class="cam-label">Camera view</h1>
-        <span class="camera-status" role="status">
-          {cameraState === 'live' ? 'Live' : cameraState === 'starting' ? 'Connecting…' : 'Camera off'}
+  <!-- Full-bleed camera -->
+  <div class="video" class:live={cameraState === 'live'}>
+    <video
+      class="camera-feed"
+      bind:this={videoElement}
+      autoplay
+      muted
+      playsinline
+      aria-hidden="true"
+    ></video>
+    {#if app.phase === 'items'}
+      {#each app.detections as d, i}
+        <div
+          class="det-box"
+          style="left: {d.x}%; top: {d.y}%; width: {d.w}%; height: {d.h}%; animation-delay: {i * 0.12}s"
+        ></div>
+        <span class="det-chip" style="left: {d.x}%; top: calc({d.y}% - 27px); animation-delay: {i * 0.12}s">
+          {d.label}
         </span>
-        {#if cameraState === 'idle' || cameraState === 'error'}
-          <button class="camera-action" onclick={startCamera}>
-            {cameraState === 'idle' ? 'Start camera' : 'Retry camera'}
-          </button>
-        {/if}
+      {/each}
+      <div class="corner-buddy">
+        <Mascot dark mood="happy" size={13} />
       </div>
-      <div
-        class="video"
-        class:live={cameraState === 'live'}
-        class:clickable={canRecognize}
-        role="button"
-        tabindex={canRecognize ? 0 : -1}
-        aria-disabled={!canRecognize}
-        aria-label="Recognize items in view"
-        onclick={() => canRecognize && recognize()}
-        onkeydown={(e) => {
-          if (canRecognize && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault()
-            recognize()
-          }
-        }}
-      >
-        <video
-          class="camera-feed"
-          bind:this={videoElement}
-          autoplay
-          muted
-          playsinline
-          aria-hidden="true"
-        ></video>
-        {#if app.phase === 'items'}
-          {#each app.detections as d, i}
-            <div
-              class="det-box"
-              style="left: {d.x}%; top: {d.y}%; width: {d.w}%; height: {d.h}%; animation-delay: {i * 0.12}s"
-            ></div>
-            <span class="det-chip" style="left: {d.x}%; top: calc({d.y}% - 27px); animation-delay: {i * 0.12}s">
-              {d.label}
-            </span>
-          {/each}
-        {:else}
-          <span class="brackets" aria-hidden="true">
-            <span class="bracket tl"></span>
-            <span class="bracket tr"></span>
-            <span class="bracket br"></span>
-            <span class="bracket bl"></span>
-          </span>
-          {#if cameraState !== 'live'}
-            <p class="video-title">
-              {cameraState === 'starting' ? 'Starting camera…' : cameraState === 'error' ? 'Camera unavailable.' : 'Camera is off.'}
-            </p>
-            <p class="video-sub">
-              {cameraState === 'error'
-                ? cameraError
-                : cameraState === 'starting'
-                  ? 'Allow camera access in your browser to see the live preview.'
-                  : 'Start the camera to see your items here.'}
-            </p>
-          {:else if app.phase === 'recognizing'}
-            <div class="scanline"></div>
-            <p class="video-title">Recognizing your items…</p>
-            <p class="video-sub">Keep your items still for a moment.</p>
-          {:else}
-            <p class="video-title">Place your first item.</p>
-            <p class="video-sub">We'll recognize it and add it to your basket.</p>
+    {:else if cameraState !== 'live' || app.phase === 'recognizing'}
+      <div class="video-overlay">
+        {#if cameraState !== 'live'}
+          <Mascot
+            dark
+            mood={cameraState === 'error' ? 'oops' : 'idle'}
+            size={17}
+            bubble={cameraState === 'idle' ? "Hi, I'm Byte! Start the camera and I'll spot your items." : ''}
+          />
+          <p class="video-title">
+            {cameraState === 'starting' ? 'Starting camera…' : cameraState === 'error' ? 'Camera unavailable.' : 'Camera is off.'}
+          </p>
+          <p class="video-sub">
+            {cameraState === 'error'
+              ? cameraError
+              : cameraState === 'starting'
+                ? 'Allow camera access in your browser to see the live preview.'
+                : 'Start the camera to see your items here.'}
+          </p>
+          {#if cameraState === 'idle' || cameraState === 'error'}
+            <button class="btn-red start-cam" onclick={startCamera}>
+              <Icon name="camera" size={16} />
+              {cameraState === 'idle' ? 'Start camera' : 'Retry camera'}
+            </button>
           {/if}
+        {:else}
+          <div class="scanline"></div>
+          <Mascot dark mood="scan" size={15} />
+          <p class="video-title">Recognizing your items…</p>
+          <p class="video-sub">Keep your items still for a moment.</p>
         {/if}
       </div>
+    {/if}
+  </div>
+
+  <!-- Floating camera chip -->
+  <div class="top-chip">
+    <Icon name="camera" size={13} />
+    <h1 class="kiosk-name">{app.kioskName}</h1>
+    <span class="cam-state" role="status">
+      <span
+        class="dot"
+        class:dot-live={cameraState === 'live'}
+        class:dot-starting={cameraState === 'starting'}
+      ></span>
+      {cameraState === 'live' ? 'Live' : cameraState === 'starting' ? 'Connecting…' : 'Camera off'}
+    </span>
+  </div>
+
+  <!-- Quick actions -->
+  <div class="mini-actions">
+    <button class="mini-btn" onclick={() => (app.modal = 'startover')}>Start over</button>
+    <button class="mini-btn" onclick={() => go('landing')}>Staff access</button>
+  </div>
+
+  <!-- Basket + help -->
+  <div class="side">
+    <div class="card cart">
+      <div class="cart-head">
+        <span class="cart-title">Your items</span>
+        <span class="cart-count tnum">{count} item{count === 1 ? '' : 's'}</span>
+      </div>
+
+      {#if app.cart.length > 0}
+        <div class="cart-items">
+          {#each app.cart as item, i (item.key)}
+            <div class="cart-row" style="animation-delay: {i * 0.05}s">
+              <span class="cart-thumb"><ProductArt kind={item.art} size={24} /></span>
+              <span class="cart-name">{item.name}</span>
+              <span class="cart-price tnum">{money(item.price * item.qty)}</span>
+              <button class="step-btn minus" onclick={() => setQty(item.key, -1)} aria-label="Decrease {item.name}">−</button>
+              <span class="cart-qty tnum">{item.qty}</span>
+              <button class="step-btn plus" onclick={() => setQty(item.key, 1)} aria-label="Increase {item.name}">+</button>
+              <button class="remove-btn" onclick={() => removeItem(item.key)}>Remove</button>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div class="empty-state cart-empty">
+          <p class="empty-title">Your basket is empty.</p>
+          <p class="empty-sub">Recognized items will appear here.</p>
+        </div>
+      {/if}
+
+      <div class="total-row">
+        <span class="total-label">Total</span>
+        {#key total}
+          <span class="total-value tnum">{money(total)}</span>
+        {/key}
+      </div>
+      <button
+        class="btn-red finish-btn"
+        class:waiting={app.cart.length === 0}
+        disabled={app.cart.length === 0}
+        onclick={() => (app.modal = 'review')}
+      >
+        {app.cart.length === 0 ? 'Waiting for items' : 'Review & finish'}
+      </button>
     </div>
 
-    <!-- Status strip -->
-    <div class="status-strip">
+    <button
+      class="help-btn"
+      class:open={app.modal === 'help'}
+      aria-expanded={app.modal === 'help'}
+      onclick={() => (app.modal = app.modal === 'help' ? null : 'help')}
+    >
+      <span class="help-icon"><Icon name="help" size={17} /></span>
+      <span class="help-label">Need help?</span>
+    </button>
+  </div>
+
+  <!-- Status pill -->
+  {#if statusText}
+    <div class="status-pill" class:busy={app.phase === 'recognizing'} class:done={app.phase === 'items'}>
       <span class="status-icon" class:spin={app.phase === 'recognizing'}>
-        <Icon name={app.phase === 'items' ? 'checkCircle' : app.phase === 'recognizing' ? 'refresh' : 'scan'} size={18} />
+        <Icon name={app.phase === 'items' ? 'checkCircle' : app.phase === 'recognizing' ? 'refresh' : 'scan'} size={16} />
       </span>
       <span class="status-text">{statusText}</span>
     </div>
+  {/if}
 
-    <!-- Footer -->
-    <div class="footer">
-      <button class="btn-line help-btn" onclick={() => (app.modal = 'help')}>Need help?</button>
-      <button class="plain-btn startover-btn" onclick={() => (app.modal = 'startover')}>Start over</button>
-      <button class="plain-btn staff-btn" onclick={() => go('landing')}>Staff access</button>
+  <!-- Help chat -->
+  {#if app.modal === 'help'}
+    <div class="chat-pop">
+      <HelpChat />
     </div>
-  </div>
-
-  <!-- Cart -->
-  <div class="card cart">
-    <div class="cart-head">
-      <span class="cart-title">Your items</span>
-      <span class="cart-count tnum">{count} item{count === 1 ? '' : 's'}</span>
-    </div>
-
-    {#if app.cart.length > 0}
-      <div class="cart-items">
-        {#each app.cart as item (item.key)}
-          <div class="cart-row">
-            <span class="cart-thumb"><ProductArt kind={item.art} size={26} /></span>
-            <span class="cart-name">{item.name}</span>
-            <span class="cart-price tnum">{money(item.price * item.qty)}</span>
-            <button class="step-btn minus" onclick={() => setQty(item.key, -1)} aria-label="Decrease {item.name}">−</button>
-            <span class="cart-qty tnum">{item.qty}</span>
-            <button class="step-btn plus" onclick={() => setQty(item.key, 1)} aria-label="Increase {item.name}">+</button>
-            <button class="remove-btn" onclick={() => removeItem(item.key)}>Remove</button>
-          </div>
-        {/each}
-      </div>
-    {:else}
-      <div class="empty-state cart-empty">
-        <span class="icon-chip"><Icon name="basket" size={18} /></span>
-        <p class="empty-title">Your basket is empty.</p>
-        <p class="empty-sub">Recognized items will appear here.</p>
-      </div>
-    {/if}
-
-    <div class="total-row">
-      <span class="total-label">Total</span>
-      <span class="total-value tnum">{money(total)}</span>
-    </div>
-    <button
-      class="btn-red finish-btn"
-      class:waiting={app.cart.length === 0}
-      disabled={app.cart.length === 0}
-      onclick={() => (app.modal = 'review')}
-    >
-      {app.cart.length === 0 ? 'Waiting for items' : 'Review & finish'}
-    </button>
-  </div>
+  {/if}
 
   <!-- Review modal -->
   {#if app.modal === 'review'}
@@ -265,20 +278,6 @@
     </div>
   {/if}
 
-  <!-- Help modal -->
-  {#if app.modal === 'help'}
-    <div class="scrim" onclick={(event) => event.target === event.currentTarget && (app.modal = null)} role="presentation">
-      <div class="modal-card help-card" role="dialog" aria-modal="true" aria-label="Need help" tabindex="-1" use:focusDialog>
-        <h2 class="modal-title">Need a hand?</h2>
-        <p class="modal-sub help-body">A team member can help check an item or correct your basket.</p>
-        <div class="modal-actions">
-          <button class="btn-red modal-btn small" onclick={() => (app.modal = null)}>Back to checkout</button>
-          <button class="btn-line modal-btn small" onclick={() => go('landing')}>Staff access</button>
-        </div>
-      </div>
-    </div>
-  {/if}
-
   <!-- Start over modal -->
   {#if app.modal === 'startover'}
     <div class="scrim" onclick={(event) => event.target === event.currentTarget && (app.modal = null)} role="presentation">
@@ -298,75 +297,15 @@
   .kiosk {
     position: absolute;
     inset: 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 464px;
-    grid-template-rows: minmax(0, 1fr);
-    column-gap: 32px;
-    padding: 32px 64px;
+    background: var(--cam);
+    overflow: hidden;
     animation: fadeIn 0.25s ease both;
   }
 
-  .main {
-    grid-column: 1;
-    grid-row: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    min-height: 0;
-  }
-  .camera-card {
-    flex: 1;
-    min-height: 320px;
-    display: flex;
-    flex-direction: column;
-    padding: 24px;
-    background: var(--dark);
-    border-radius: 14px;
-  }
-  .cam-head {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    flex-wrap: wrap;
-    flex-shrink: 0;
-  }
-  .cam-icon {
-    display: flex;
-    color: var(--white);
-  }
-  .cam-label {
-    font-size: 14px;
-    line-height: 1;
-    font-weight: 700;
-    color: var(--white);
-  }
-  .camera-status {
-    margin-left: auto;
-    font-size: 12px;
-    color: var(--surface);
-  }
-  .camera-action {
-    padding: 6px 10px;
-    border: 1px solid var(--cam-border);
-    border-radius: 6px;
-    color: var(--white);
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .camera-action:hover {
-    background: var(--dark2);
-  }
   .video {
-    position: relative;
-    flex: 1;
-    margin-top: 24px;
-    background: var(--cam);
-    border: 1px solid var(--cam-border);
-    border-radius: 4px;
+    position: absolute;
+    inset: 0;
     overflow: hidden;
-  }
-  .video.clickable {
-    cursor: pointer;
   }
   .camera-feed {
     position: absolute;
@@ -383,9 +322,6 @@
   .video.live .video-title,
   .video.live .video-sub {
     text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
-  }
-  .video.live .bracket {
-    border-color: var(--surface);
   }
   .det-box {
     position: absolute;
@@ -411,63 +347,38 @@
     white-space: nowrap;
   }
 
-  .brackets {
+  .video-overlay {
     position: absolute;
-    left: 50%;
-    top: 40%;
-    width: 44px;
-    height: 44px;
-    transform: translate(-50%, -50%);
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
   }
-  .bracket {
+  .start-cam {
+    margin-top: 10px;
+    height: 48px;
+    padding: 0 24px;
+    font-size: 15px;
+  }
+  .corner-buddy {
     position: absolute;
-    width: 11px;
-    height: 11px;
-    border-color: var(--cam-border);
-    border-style: solid;
-    border-width: 0;
-  }
-  .bracket.tl {
-    left: 0;
-    top: 0;
-    border-left-width: 2px;
-    border-top-width: 2px;
-  }
-  .bracket.tr {
-    right: 0;
-    top: 0;
-    border-right-width: 2px;
-    border-top-width: 2px;
-  }
-  .bracket.br {
-    right: 0;
-    bottom: 0;
-    border-right-width: 2px;
-    border-bottom-width: 2px;
-  }
-  .bracket.bl {
-    left: 0;
-    bottom: 0;
-    border-left-width: 2px;
-    border-bottom-width: 2px;
+    left: 20px;
+    bottom: 62px;
+    animation: fadeUp 0.3s ease both;
   }
   .video-title {
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    top: 50%;
-    text-align: center;
+    max-width: 480px;
     font-size: 24px;
-    line-height: 1;
+    line-height: 1.15;
     font-weight: 700;
     color: var(--white);
   }
   .video-sub {
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    top: 61%;
-    text-align: center;
+    max-width: 440px;
     font-size: 16px;
     line-height: 1.3;
     color: var(--white);
@@ -498,76 +409,92 @@
     }
   }
 
-  .status-strip {
-    margin-top: 16px;
-    height: 52px;
-    flex-shrink: 0;
-    background: var(--green-bg);
-    border-radius: 10px;
-    box-shadow: 0 4px 14px rgba(23, 23, 23, 0.1);
-    display: flex;
+  .top-chip {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    z-index: 10;
+    display: inline-flex;
     align-items: center;
-    gap: 13px;
-    padding: 0 17px;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: rgba(42, 42, 41, 0.66);
+    border: 1px solid rgba(226, 229, 222, 0.14);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: var(--surface);
+    animation: fadeUp 0.3s ease both;
   }
-  .status-icon {
-    display: flex;
-    color: var(--ink);
-    flex-shrink: 0;
-  }
-  .status-icon.spin :global(svg) {
-    animation: spin 1.1s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-  .status-text {
-    font-size: 17px;
-    line-height: 1.2;
-    color: var(--ink);
-  }
-
-  .footer {
-    margin-top: 24px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 24px;
-    flex-wrap: wrap;
-  }
-  .help-btn {
-    width: 208px;
-    height: 56px;
-    font-size: 18px;
-  }
-  .plain-btn {
+  .kiosk-name {
+    font-size: 12px;
     line-height: 1;
     font-weight: 700;
-    color: var(--ink);
+    color: var(--white);
   }
-  .plain-btn:hover {
-    text-decoration: underline;
-    text-underline-offset: 4px;
+  .cam-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1;
+    opacity: 0.9;
   }
-  .startover-btn {
-    font-size: 18px;
+  .cam-state .dot {
+    background: var(--cam-border);
   }
-  .staff-btn {
-    margin-left: auto;
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--muted);
+  .cam-state .dot-live {
+    background: var(--dot-green);
+  }
+  .cam-state .dot-starting {
+    background: var(--amber-bg);
+    animation: pulse 1.2s ease-in-out infinite;
   }
 
-  .cart {
-    grid-column: 2;
-    grid-row: 1;
+  .mini-actions {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 10;
+    display: flex;
+    gap: 8px;
+    animation: fadeUp 0.3s ease both;
+  }
+  .mini-btn {
+    padding: 12px 20px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    transition: background 0.15s ease;
+  }
+  .mini-btn:hover {
+    background: var(--chip);
+  }
+
+  .side {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    bottom: 20px;
+    z-index: 10;
+    width: 360px;
     display: flex;
     flex-direction: column;
+    gap: 14px;
+    animation: fadeUp 0.3s ease both;
+  }
+  .cart {
+    flex: 1;
     min-height: 0;
-    padding: 22px 25px 25px;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 20px 20px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
   }
   .cart-head {
     display: flex;
@@ -577,12 +504,12 @@
     flex-shrink: 0;
   }
   .cart-title {
-    font-size: 22px;
+    font-size: 18px;
     line-height: 1;
     font-weight: 700;
   }
   .cart-count {
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1;
     color: var(--muted);
   }
@@ -590,19 +517,19 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    margin-top: 24px;
+    margin-top: 16px;
   }
   .cart-row {
     position: relative;
-    height: 80px;
+    height: 72px;
     animation: fadeUp 0.25s ease both;
   }
   .cart-thumb {
     position: absolute;
     left: 0;
     top: 0;
-    width: 44px;
-    height: 48px;
+    width: 40px;
+    height: 44px;
     background: var(--chip);
     border-radius: 8px;
     box-shadow: 0 2px 6px rgba(23, 23, 23, 0.12);
@@ -613,10 +540,10 @@
   }
   .cart-name {
     position: absolute;
-    left: 56px;
+    left: 52px;
     top: 2px;
-    max-width: calc(100% - 160px);
-    font-size: 18px;
+    max-width: calc(100% - 150px);
+    font-size: 16px;
     line-height: 1;
     font-weight: 700;
     white-space: nowrap;
@@ -627,14 +554,14 @@
     position: absolute;
     right: 0;
     top: 1px;
-    font-size: 20px;
+    font-size: 18px;
     line-height: 1;
     font-weight: 700;
   }
   .step-btn {
     position: absolute;
-    top: 33px;
-    font-size: 22px;
+    top: 30px;
+    font-size: 20px;
     line-height: 1;
     color: var(--ink);
     padding: 2px 6px;
@@ -644,25 +571,25 @@
     background: var(--chip);
   }
   .step-btn.minus {
-    left: 65px;
+    left: 58px;
   }
   .step-btn.plus {
-    left: 137px;
+    left: 126px;
   }
   .cart-qty {
     position: absolute;
-    left: 110px;
-    top: 36px;
-    width: 24px;
+    left: 100px;
+    top: 33px;
+    width: 22px;
     text-align: center;
-    font-size: 18px;
+    font-size: 16px;
     line-height: 1;
   }
   .remove-btn {
     position: absolute;
     right: 0;
-    top: 43px;
-    font-size: 13px;
+    top: 38px;
+    font-size: 12px;
     line-height: 1;
     color: var(--muted);
   }
@@ -675,14 +602,14 @@
     justify-content: center;
   }
   .cart-empty .empty-title {
-    font-size: 20px;
+    font-size: 16px;
   }
   .cart-empty .empty-sub {
-    margin-top: 14px;
-    font-size: 15px;
+    margin-top: 8px;
+    font-size: 13px;
   }
   .total-row {
-    margin-top: 16px;
+    margin-top: 12px;
     flex-shrink: 0;
     display: flex;
     align-items: baseline;
@@ -690,25 +617,135 @@
     gap: 16px;
   }
   .total-label {
-    font-size: 18px;
+    font-size: 16px;
     line-height: 1;
   }
   .total-value {
-    font-size: 32px;
+    font-size: 28px;
     line-height: 1;
     font-weight: 700;
     letter-spacing: -0.5px;
+    animation: tick 0.25s ease both;
+  }
+  @keyframes tick {
+    from {
+      transform: scale(1.08);
+    }
+    to {
+      transform: scale(1);
+    }
   }
   .finish-btn {
-    margin-top: 20px;
+    margin-top: 14px;
     flex-shrink: 0;
     width: 100%;
-    height: 64px;
-    font-size: 20px;
+    height: 56px;
+    font-size: 18px;
   }
   .finish-btn.waiting {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 500;
+  }
+
+  .help-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 58px;
+    padding: 0 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    transition: background 0.15s ease;
+  }
+  .help-btn:hover {
+    background: var(--chip);
+  }
+  .help-btn.open {
+    background: var(--chip);
+    border-color: var(--muted);
+  }
+  .help-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--chip);
+    color: var(--ink);
+    flex-shrink: 0;
+  }
+  .help-btn.open .help-icon {
+    background: var(--surface);
+  }
+  .help-label {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .status-pill {
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 400px;
+    margin: 0 auto;
+    width: max-content;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    max-width: calc(100% - 640px);
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: var(--chip);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    transition: background 0.3s ease;
+    animation: fadeUp 0.3s ease both;
+  }
+  .status-pill.busy {
+    background: var(--amber-bg);
+  }
+  .status-pill.done {
+    background: var(--green-bg);
+  }
+  .status-icon {
+    display: flex;
+    color: var(--ink);
+    flex-shrink: 0;
+  }
+  .status-pill.busy .status-icon {
+    color: var(--amber);
+  }
+  .status-icon.spin :global(svg) {
+    animation: spin 1.1s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .status-text {
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chat-pop {
+    position: absolute;
+    right: 20px;
+    bottom: 90px;
+    z-index: 40;
+    width: 360px;
+    height: 460px;
+    max-height: calc(100% - 130px);
+    animation: popIn 0.2s ease both;
   }
 
   .scrim {
@@ -736,10 +773,9 @@
     max-width: 600px;
     padding: 28px 32px 32px;
   }
-  .help-card,
   .startover-card {
     max-width: 560px;
-    padding: 35px 32px 32px;
+    padding: 28px 32px 32px;
   }
   .modal-title {
     font-size: 28px;
@@ -748,24 +784,16 @@
     letter-spacing: -0.3px;
   }
   .modal-sub {
+    margin-top: 12px;
     font-size: 17px;
     line-height: 1.35;
     color: var(--ink);
   }
-  .review-sub {
-    margin-top: 35px;
-  }
-  .help-body {
-    margin-top: 32px;
-  }
-  .startover-sub {
-    margin-top: 32px;
-  }
   .review-lines {
-    margin-top: 32px;
+    margin-top: 24px;
     display: flex;
     flex-direction: column;
-    gap: 38px;
+    gap: 18px;
     overflow-y: auto;
     min-height: 0;
   }
@@ -790,7 +818,7 @@
     flex-shrink: 0;
   }
   .modal-total {
-    margin-top: 32px;
+    margin-top: 24px;
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -807,7 +835,7 @@
     font-weight: 700;
   }
   .modal-actions {
-    margin-top: 30px;
+    margin-top: 28px;
     display: flex;
     gap: 16px;
     flex-wrap: wrap;
@@ -822,40 +850,61 @@
     font-size: 16px;
   }
 
-  @media (max-width: 1200px) {
-    .kiosk {
-      grid-template-columns: minmax(0, 1fr) 400px;
-      padding: 32px 40px;
+  @media (max-width: 1100px) {
+    .side {
+      top: auto;
+      left: 16px;
+      right: 16px;
+      bottom: 16px;
+      width: auto;
+      max-height: 52%;
     }
-  }
-  @media (max-width: 1000px) {
-    .kiosk {
-      grid-template-columns: 1fr;
-      grid-template-rows: auto auto;
-      overflow-y: auto;
+    .help-btn {
+      height: 50px;
     }
-    .main {
-      min-height: max(640px, calc(100svh - 64px));
+    .status-pill {
+      top: 16px;
+      bottom: auto;
+      left: auto;
+      right: 16px;
+      margin: 0;
+      max-width: calc(100% - 260px);
     }
-    .cart {
-      grid-column: 1;
-      grid-row: 2;
-      margin-top: 24px;
-      min-height: 480px;
+    .status-text {
+      white-space: normal;
+    }
+    .mini-actions {
+      top: 56px;
+      left: 16px;
+    }
+    .top-chip {
+      top: 16px;
+      bottom: auto;
+      left: 16px;
+    }
+    .corner-buddy {
+      display: none;
+    }
+    .video-overlay {
+      justify-content: flex-start;
+      padding: 14vh 24px 24px;
+    }
+    .chat-pop {
+      left: 16px;
+      right: 16px;
+      bottom: 76px;
+      width: auto;
+      height: 420px;
+      max-height: calc(100% - 190px);
     }
   }
   @media (max-width: 640px) {
-    .kiosk {
-      padding: 28px 20px 24px;
+    .status-pill {
+      max-width: calc(100% - 210px);
+      padding: 8px 14px;
     }
-    .main {
-      min-height: max(640px, calc(100svh - 52px));
-    }
-    .help-btn {
-      width: 100%;
-    }
-    .staff-btn {
-      margin-left: 0;
+    .status-text {
+      font-size: 13px;
     }
     .modal-btn {
       min-width: 100%;
