@@ -1,0 +1,42 @@
+# Ultralytics training overrides. Run from the repo root:
+#   uv run --group ml yolo train cfg=ml/configs/train.yaml model=yolo11s.pt name=yolo11s
+# yolo11s with a frozen backbone: same or better accuracy than yolo11m in a fraction of the time,
+# and the most consistent across seeds (see ml/README.md)
+task: detect
+mode: train
+data: ml/datasets/food/data.yaml
+exist_ok: true
+epochs: 150
+patience: 20 # with the backbone frozen, stopping at 20 cost at most 0.017 val mAP50-95 vs 50
+freeze: 10 # backbone layers keep their COCO weights; only the neck and head train
+imgsz: 640
+batch: 8 # fits yolo11l on an 8 GB RTX 4060; kept for yolo11s so results stay comparable
+device: 0
+workers: 2
+seed: 0
+deterministic: true
+
+# Optimizer: 'auto' picks AdamW lr=0.00125 for 4 classes, which diverges on this data
+optimizer: AdamW
+lr0: 0.0002
+nbs: 8 # step every batch; the default 64 accumulates 8 batches per step, too few steps on a few hundred images
+warmup_bias_lr: 0.0 # 0.1 is an SGD default and blows up AdamW
+
+# Augmentation (applied on the fly each epoch)
+hsv_h: 0.015 # store lighting/white balance
+hsv_s: 0.7
+hsv_v: 0.4
+degrees: 180 # top-down camera: any rotation is realistic
+translate: 0.1
+scale: 0.5 # camera height / item size
+shear: 2.0
+perspective: 0.0005 # slight camera tilt
+# No flips: a camera never sees a product mirrored, and mirrored label text is a fake view (rotation covers "no up")
+fliplr: 0.0
+flipud: 0.0
+# Production frames hold one item, so never combine images
+mosaic: 0.0
+mixup: 0.0
+cutmix: 0.0
+copy_paste: 0.0
+close_mosaic: 0
