@@ -18,6 +18,18 @@ frontend/design/screenshots/
 # ML experiments and model weights
 .ipynb_checkpoints/
 /ml/runs/
+/runs/
+/mobileclip*.ts
+# Datasets live on the team Google Drive, not in Git
+/ml/datasets/
 /ml/weights/
 *.pt
 *.onnx
+
+# Raw HEIC captures (converted copies live in ml/datasets/)
+/FoodDataset/
+/fooddata/
+
+# Local tool state
+/.serena/
+/.runs/
