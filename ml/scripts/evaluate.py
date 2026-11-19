@@ -9,17 +9,30 @@ on the local GPU.
 """
 
 import hashlib
+import json
 import sys
 from collections import Counter
 from pathlib import Path
 
+import cv2
 import torch
+from PIL import Image
 from ultralytics import YOLO, YOLOE
 from ultralytics.utils import YAML
 from ultralytics.utils.metrics import box_iou
 from ultralytics.utils.ops import xywhn2xyxy
 
-from prepare_dataset import CLASSES, is_swipe, normalize, video_frames
+from annotate import normalize
+from dataset import CATALOG
+from import_fooddata import kind
+
+# Capture folder -> class name in the hand-checked v4 dataset; same order as the catalog's class IDs
+CLASSES = {
+    "coca cola": "coca_cola",
+    "ketchup": "ketchup",
+    "ice cream": "ice_cream",
+    "nutella": "nutella",
+}
 
 DATA = Path(__file__).resolve().parents[1] / "datasets" / "food"
 RAW = Path(__file__).resolve().parents[2] / "fooddata"
@@ -31,9 +44,19 @@ PROMPTS = [
     "Ben & Jerry's ice cream tub",
     "Nutella jar",
 ]
-LOOKUP = {n: i for i, n in enumerate(NAMES)} | {p: i for i, p in enumerate(PROMPTS)}
+# Pipeline-trained models name their classes by SKU (ml/scripts/dataset.py)
+SKUS = {p["sku"]: p["class_id"] for p in json.loads(CATALOG.read_text(encoding="utf-8"))["products"]}
+LOOKUP = {n: i for i, n in enumerate(NAMES)} | {p: i for i, p in enumerate(PROMPTS)} | SKUS
 SPLITS = ("val", "test")
 ERRORS = ("wrong class", "loose box", "no box")
+
+
+def video_frames(f: Path):
+    """Every frame of a video, as RGB images."""
+    cap = cv2.VideoCapture(str(f))
+    while cap.grab():
+        _, bgr = cap.retrieve()  # OpenCV applies the iPhone rotation flag
+        yield Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
 
 
 def ours(model) -> dict[int, int]:
@@ -109,7 +132,7 @@ def swipes(model) -> str:
     total, seen, notes = Counter(), {}, []
     for folder, name in CLASSES.items():
         for f in sorted((RAW / folder).glob("*.MOV")):
-            if not is_swipe(f):
+            if kind(f) != "swipe":
                 continue
             first = seen.setdefault(hashlib.md5(f.read_bytes()).hexdigest(), f)
             if first != f:  # shortcut: catches a clip copied into a second product folder; drop once fooddata is clean
@@ -117,7 +140,7 @@ def swipes(model) -> str:
                 continue
             frames = no_box = 0
             wrong, votes = Counter(), Counter()
-            for _, im in video_frames(f, step=1):
+            for im in video_frames(f):
                 frames += 1
                 b = model.predict(normalize(im), conf=0.25, verbose=False)[0].boxes
                 if not len(b):

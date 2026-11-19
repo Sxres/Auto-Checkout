@@ -29,8 +29,9 @@ still passes.
 ## Catalog
 
 `backend/app/catalog.json` is the single source of truth mapping model class IDs to SKU, name,
-price, and UI art. Class IDs match `ml/scripts/prepare_dataset.py` and the checkpoint's own
-`names` dict — do not reorder them.
+price, and UI art. The dataset build (`ml/scripts/dataset.py`) writes these class IDs into the
+training labels, so the checkpoint's `names` are the SKUs. A new product gets the next unused
+class ID; never reuse or reorder them.
 
 | Class ID | Class | SKU | Name | Price (USD) |
 | --- | --- | --- | --- | --- |

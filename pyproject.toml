@@ -12,7 +12,11 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    # The annotator's light dependencies (ml/scripts/annotate.py), so CI can test it
+    "boto3>=1.35,<2",
     "httpx>=0.28,<1",
+    "moto[s3]>=5,<6",
+    "opencv-python-headless>=4.10",
     "pytest>=8,<10",
     "ruff>=0.9,<1",
 ]
@@ -28,6 +32,9 @@ ml = [
 
 [tool.uv]
 package = false
+# ultralytics wants opencv-python, but both it and the headless build install cv2 over each other;
+# keep only headless, as the annotator's Lambda image does
+override-dependencies = ["opencv-python; sys_platform == 'never'"]
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
