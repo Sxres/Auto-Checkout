@@ -48,8 +48,8 @@ export const app = $state({
   kioskStatus: { online: false, cameraConnected: false, lastCheck: null },
 
   cart: [], // { key, name, price, art, qty }
-  detections: [], // { label, x, y, w, h } in % of the video area
-  phase: 'empty', // empty | recognizing | items
+  detections: [], // { label, x, y, w, h } in % of the camera frame
+  phase: 'empty', // empty | items
   modal: null, // review | help | startover
   lastTotal: 0,
 
@@ -149,24 +149,86 @@ export function startCheckout() {
   app.cart = []
   app.detections = []
   app.phase = 'empty'
+  resetSwipe()
   go('kiosk')
 }
 
-export async function recognize() {
-  if (app.phase !== 'empty') return
-  app.phase = 'recognizing'
-  const [result] = await Promise.all([
-    api.recognizeItems(),
-    new Promise((r) => setTimeout(r, 1700)),
-  ])
-  app.detections = result.detections
-  if (!result.items.length) {
-    app.phase = 'empty'
-    toast('Nothing recognized — the recognition service is not connected yet.')
-    return
-  }
-  app.cart = result.items.map((i) => ({ ...i, qty: 1 }))
+const SCAN_ERRORS = {
+  model_unavailable: 'Recognition is offline — the model is not loaded. Please ask staff for help.',
+  network: 'Could not reach the recognition service. Check the connection and try again.',
+  invalid_response: 'The recognition service returned an unexpected response. Please try again.',
+  invalid_image: 'The camera frame could not be read. Please try scanning again.',
+  unsupported_media_type: 'The camera frame could not be read. Please try scanning again.',
+  image_too_large: 'The camera frame was too large. Please try scanning again.',
+}
+
+// Mirrors ml/scripts/evaluate.py swipe scoring: each frame's top box adds its confidence
+// to its class, and the highest total wins. Lower VOTE_TO_ADD charges sooner but leans
+// on fewer agreeing frames.
+const VOTE_TO_ADD = 1.5
+// Time-based, not frame-count-based, so re-arming does not speed up with the poll rate
+// and a brief detection dropout cannot charge the same item twice.
+const REARM_EMPTY_MS = 450
+
+let votes = new Map()
+let emptySince = null
+let charged = false
+let observing = false
+let lastError = null
+
+function resetSwipe() {
+  votes.clear()
+  emptySince = null
+  charged = false
+  lastError = null
+}
+
+function addToBasket(item) {
+  const existing = app.cart.find((i) => i.key === item.key)
+  if (existing) existing.qty += 1
+  else app.cart.push({ ...item, qty: 1 })
   app.phase = 'items'
+}
+
+export async function observe(frame) {
+  if (observing) return
+  observing = true
+  try {
+    const result = await api.recognizeItems(frame)
+    lastError = null
+    app.detections = result.detections
+    const top = result.items[0]
+
+    if (!top) {
+      emptySince ??= performance.now()
+      // The item has left the frame, so the next swipe can be charged.
+      if (performance.now() - emptySince >= REARM_EMPTY_MS) {
+        votes.clear()
+        charged = false
+      }
+      return
+    }
+
+    emptySince = null
+    if (charged) return
+
+    votes.set(top.key, (votes.get(top.key) ?? 0) + result.detections[0].confidence)
+    const leader = [...votes.entries()].reduce((a, b) => (b[1] > a[1] ? b : a))
+    if (leader[1] >= VOTE_TO_ADD) {
+      addToBasket(top)
+      charged = true
+      votes.clear()
+    }
+  } catch (error) {
+    app.detections = []
+    // Polling repeats several times a second; only announce a change of failure.
+    if (lastError !== error.code) {
+      lastError = error.code
+      toast(SCAN_ERRORS[error.code] ?? 'Recognition failed. Retrying…')
+    }
+  } finally {
+    observing = false
+  }
 }
 
 export function setQty(key, delta) {
@@ -192,4 +254,5 @@ export function clearBasket() {
   app.detections = []
   app.phase = 'empty'
   app.modal = null
+  resetSwipe()
 }
