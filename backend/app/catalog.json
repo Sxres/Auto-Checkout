@@ -1,0 +1,35 @@
+{
+  "version": "1.0.0",
+  "currency": "USD",
+  "price_unit": "per_item",
+  "products": [
+    {
+      "class_id": 0,
+      "sku": "COKE-330",
+      "name": "Coca-Cola 330ml",
+      "price": 1.99,
+      "art": "can"
+    },
+    {
+      "class_id": 1,
+      "sku": "HEINZ-570",
+      "name": "Heinz Ketchup 570g",
+      "price": 3.49,
+      "art": "water"
+    },
+    {
+      "class_id": 2,
+      "sku": "BJ-473",
+      "name": "Ben & Jerry's 473ml",
+      "price": 5.99,
+      "art": "tub"
+    },
+    {
+      "class_id": 3,
+      "sku": "NUT-750",
+      "name": "Nutella 750g",
+      "price": 6.49,
+      "art": "jar"
+    }
+  ]
+}

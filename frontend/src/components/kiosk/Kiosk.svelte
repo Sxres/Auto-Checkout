@@ -13,6 +13,7 @@
     removeItem,
     confirmCheckout,
     clearBasket,
+    observe,
   } from '../../lib/state.svelte.js'
   import { money } from '../../lib/data.js'
   import { focusDialog } from '../../lib/dialog.js'
@@ -74,21 +75,51 @@
   onMount(() => {
     mounted = true
     if (app.settings.autoStart) startCamera()
+    watch()
     return () => {
       mounted = false
+      clearTimeout(pollTimer)
       stopCamera()
     }
   })
 
+  // YOLO letterboxes to imgsz=640, so a larger upload is discarded server-side.
+  const MAX_CAPTURE_EDGE = 640
+  const POLL_MS = 80
+
+  let videoSize = $state({ w: 0, h: 0 })
+  let pollTimer
+
+  function captureFrame() {
+    const vw = videoElement?.videoWidth ?? 0
+    const vh = videoElement?.videoHeight ?? 0
+    if (!vw || !vh) return Promise.resolve(null)
+    const shrink = Math.min(1, MAX_CAPTURE_EDGE / Math.max(vw, vh))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(vw * shrink))
+    canvas.height = Math.max(1, Math.round(vh * shrink))
+    canvas.getContext('2d').drawImage(videoElement, 0, 0, canvas.width, canvas.height)
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+  }
+
+  async function watch() {
+    if (!mounted) return
+    if (cameraState === 'live' && !app.modal) {
+      const frame = await captureFrame()
+      // Not awaited: capture keeps running while a request is in flight. observe()
+      // drops the frame if the previous one has not returned yet.
+      if (frame) observe(frame)
+    }
+    if (mounted) pollTimer = setTimeout(watch, POLL_MS)
+  }
+
   const count = $derived(cartCount())
   const total = $derived(cartTotal())
   const statusText = $derived.by(() => {
-    if (cameraState === 'starting') return 'Connecting to your camera…'
-    if (cameraState === 'error') return 'Camera unavailable. Check access and try again.'
-    if (cameraState === 'idle') return 'Start the camera to begin your checkout.'
-    if (app.phase === 'items') return `${count} item${count === 1 ? '' : 's'} recognized. Ready for your next item.`
-    if (app.phase === 'recognizing') return 'Recognizing your items…'
-    return null
+    // When the camera is off the overlay already explains what to do.
+    if (cameraState !== 'live') return null
+    if (app.phase === 'items') return `${count} item${count === 1 ? '' : 's'} in your basket. Swipe your next item.`
+    return 'Watching for items — swipe one across the camera.'
   })
 
   $effect(() => {
@@ -101,82 +132,95 @@
 </script>
 
 <div class="kiosk">
-  <!-- Full-bleed camera -->
-  <div class="video" class:live={cameraState === 'live'}>
+  <!-- Camera card, locked to the frame's aspect ratio -->
+  <div
+    class="video"
+    class:live={cameraState === 'live'}
+    style="--fw: {videoSize.w || 16}; --fh: {videoSize.h || 9}"
+  >
     <video
       class="camera-feed"
       bind:this={videoElement}
+      onloadedmetadata={() => (videoSize = { w: videoElement.videoWidth, h: videoElement.videoHeight })}
       autoplay
       muted
       playsinline
       aria-hidden="true"
     ></video>
-    {#if app.phase === 'items'}
-      {#each app.detections as d, i}
-        <div
-          class="det-box"
-          style="left: {d.x}%; top: {d.y}%; width: {d.w}%; height: {d.h}%; animation-delay: {i * 0.12}s"
-        ></div>
-        <span class="det-chip" style="left: {d.x}%; top: calc({d.y}% - 27px); animation-delay: {i * 0.12}s">
-          {d.label}
-        </span>
-      {/each}
-      <div class="corner-buddy">
-        <Mascot dark mood="happy" size={13} />
+
+    {#if app.detections.length}
+      <div class="det-layer">
+        {#each app.detections as d, i}
+          <div
+            class="det-box"
+            style="left: {d.x}%; top: {d.y}%; width: {d.w}%; height: {d.h}%; animation-delay: {i * 0.12}s"
+          ></div>
+          <span class="det-chip" style="left: {d.x}%; top: max(var(--chip-floor), calc({d.y}% - 27px)); animation-delay: {i * 0.12}s">
+            {d.label}
+          </span>
+        {/each}
       </div>
-    {:else if cameraState !== 'live' || app.phase === 'recognizing'}
+    {/if}
+
+    {#if cameraState !== 'live'}
       <div class="video-overlay">
-        {#if cameraState !== 'live'}
-          <Mascot
-            dark
-            mood={cameraState === 'error' ? 'oops' : 'idle'}
-            size={17}
-            bubble={cameraState === 'idle' ? "Hi, I'm Byte! Start the camera and I'll spot your items." : ''}
-          />
-          <p class="video-title">
-            {cameraState === 'starting' ? 'Starting camera…' : cameraState === 'error' ? 'Camera unavailable.' : 'Camera is off.'}
-          </p>
-          <p class="video-sub">
-            {cameraState === 'error'
-              ? cameraError
-              : cameraState === 'starting'
-                ? 'Allow camera access in your browser to see the live preview.'
-                : 'Start the camera to see your items here.'}
-          </p>
-          {#if cameraState === 'idle' || cameraState === 'error'}
-            <button class="btn-red start-cam" onclick={startCamera}>
-              <Icon name="camera" size={16} />
-              {cameraState === 'idle' ? 'Start camera' : 'Retry camera'}
-            </button>
-          {/if}
-        {:else}
-          <div class="scanline"></div>
-          <Mascot dark mood="scan" size={15} />
-          <p class="video-title">Recognizing your items…</p>
-          <p class="video-sub">Keep your items still for a moment.</p>
+        <Mascot
+          dark
+          mood={cameraState === 'error' ? 'oops' : 'idle'}
+          size={17}
+          bubble={cameraState === 'idle' ? "Hi, I'm Byte! Start the camera and I'll spot your items." : ''}
+        />
+        <p class="video-title">
+          {cameraState === 'starting' ? 'Starting camera…' : cameraState === 'error' ? 'Camera unavailable.' : 'Camera is off.'}
+        </p>
+        <p class="video-sub">
+          {cameraState === 'error'
+            ? cameraError
+            : cameraState === 'starting'
+              ? 'Allow camera access in your browser to see the live preview.'
+              : 'Start the camera to see your items here.'}
+        </p>
+        {#if cameraState === 'idle' || cameraState === 'error'}
+          <button class="btn-red start-cam" onclick={startCamera}>
+            <Icon name="camera" size={16} />
+            {cameraState === 'idle' ? 'Start camera' : 'Retry camera'}
+          </button>
         {/if}
       </div>
     {/if}
-  </div>
 
-  <!-- Floating camera chip -->
-  <div class="top-chip">
-    <Icon name="camera" size={13} />
-    <h1 class="kiosk-name">{app.kioskName}</h1>
-    <span class="cam-state" role="status">
-      <span
-        class="dot"
-        class:dot-live={cameraState === 'live'}
-        class:dot-starting={cameraState === 'starting'}
-      ></span>
-      {cameraState === 'live' ? 'Live' : cameraState === 'starting' ? 'Connecting…' : 'Camera off'}
-    </span>
-  </div>
+    <div class="mini-actions">
+      <button class="mini-btn" onclick={() => (app.modal = 'startover')}>Start over</button>
+      <button class="mini-btn" onclick={() => go('landing')}>Staff access</button>
+    </div>
 
-  <!-- Quick actions -->
-  <div class="mini-actions">
-    <button class="mini-btn" onclick={() => (app.modal = 'startover')}>Start over</button>
-    <button class="mini-btn" onclick={() => go('landing')}>Staff access</button>
+    <div class="top-chip">
+      <Icon name="camera" size={13} />
+      <h1 class="kiosk-name">{app.kioskName}</h1>
+      <span class="cam-state" role="status">
+        <span
+          class="dot"
+          class:dot-live={cameraState === 'live'}
+          class:dot-starting={cameraState === 'starting'}
+        ></span>
+        {cameraState === 'live' ? 'Live' : cameraState === 'starting' ? 'Connecting…' : 'Camera off'}
+      </span>
+    </div>
+
+    {#if cameraState === 'live' && app.phase === 'items'}
+      <div class="corner-buddy">
+        <Mascot dark mood="happy" size={13} />
+      </div>
+    {/if}
+
+    {#if statusText}
+      <div class="status-pill" class:done={app.phase === 'items'}>
+        <span class="status-icon">
+          <Icon name={app.phase === 'items' ? 'checkCircle' : 'scan'} size={16} />
+        </span>
+        <span class="status-text">{statusText}</span>
+      </div>
+    {/if}
   </div>
 
   <!-- Basket + help -->
@@ -235,16 +279,6 @@
     </button>
   </div>
 
-  <!-- Status pill -->
-  {#if statusText}
-    <div class="status-pill" class:busy={app.phase === 'recognizing'} class:done={app.phase === 'items'}>
-      <span class="status-icon" class:spin={app.phase === 'recognizing'}>
-        <Icon name={app.phase === 'items' ? 'checkCircle' : app.phase === 'recognizing' ? 'refresh' : 'scan'} size={16} />
-      </span>
-      <span class="status-text">{statusText}</span>
-    </div>
-  {/if}
-
   <!-- Help chat -->
   {#if app.modal === 'help'}
     <div class="chat-pop">
@@ -295,16 +329,32 @@
 
 <style>
   .kiosk {
+    --pad: 20px;
     position: absolute;
     inset: 0;
-    background: var(--cam);
+    background: var(--bg);
     overflow: hidden;
     animation: fadeIn 0.25s ease both;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    align-content: center;
+    gap: 20px;
+    padding: var(--pad);
   }
 
   .video {
-    position: absolute;
-    inset: 0;
+    position: relative;
+    /* Fit the frame to whichever axis runs out first, so a short wide window
+       cannot push the card past the bottom edge. */
+    aspect-ratio: var(--fw) / var(--fh);
+    width: min(100%, calc((100vh - 2 * var(--pad)) * var(--fw) / var(--fh)));
+    justify-self: center;
+    /* Keeps detection labels clear of the overlay buttons at the top of the card. */
+    --chip-floor: 58px;
+    background: var(--cam);
+    /* Ring instead of a border so the card box matches the frame aspect exactly. */
+    box-shadow: 0 0 0 1px var(--cam-border);
+    border-radius: 16px;
     overflow: hidden;
   }
   .camera-feed {
@@ -312,7 +362,7 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     opacity: 0;
     pointer-events: none;
   }
@@ -322,6 +372,10 @@
   .video.live .video-title,
   .video.live .video-sub {
     text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+  }
+  .det-layer {
+    position: absolute;
+    inset: 0;
   }
   .det-box {
     position: absolute;
@@ -366,8 +420,8 @@
   }
   .corner-buddy {
     position: absolute;
-    left: 20px;
-    bottom: 62px;
+    right: 14px;
+    bottom: 70px;
     animation: fadeUp 0.3s ease both;
   }
   .video-title {
@@ -384,35 +438,10 @@
     color: var(--white);
     opacity: 0.85;
   }
-  .scanline {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--green-bg), transparent);
-    animation: scan 1.4s ease-in-out infinite;
-  }
-  @keyframes scan {
-    0% {
-      top: 14%;
-      opacity: 0;
-    }
-    15% {
-      opacity: 1;
-    }
-    85% {
-      opacity: 1;
-    }
-    100% {
-      top: 85%;
-      opacity: 0;
-    }
-  }
-
   .top-chip {
     position: absolute;
-    bottom: 20px;
-    left: 20px;
+    top: 14px;
+    right: 14px;
     z-index: 10;
     display: inline-flex;
     align-items: center;
@@ -453,8 +482,8 @@
 
   .mini-actions {
     position: absolute;
-    top: 20px;
-    left: 20px;
+    top: 14px;
+    left: 14px;
     z-index: 10;
     display: flex;
     gap: 8px;
@@ -477,15 +506,10 @@
   }
 
   .side {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    bottom: 20px;
-    z-index: 10;
-    width: 360px;
     display: flex;
     flex-direction: column;
     gap: 14px;
+    min-height: 0;
     animation: fadeUp 0.3s ease both;
   }
   .cart {
@@ -688,26 +712,21 @@
   }
   .status-pill {
     position: absolute;
-    bottom: 20px;
-    left: 0;
-    right: 400px;
-    margin: 0 auto;
-    width: max-content;
+    bottom: 14px;
+    left: 14px;
+    right: 14px;
     z-index: 10;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
     min-height: 44px;
-    max-width: calc(100% - 640px);
     padding: 10px 18px;
     border-radius: 999px;
     background: var(--chip);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
     transition: background 0.3s ease;
     animation: fadeUp 0.3s ease both;
-  }
-  .status-pill.busy {
-    background: var(--amber-bg);
   }
   .status-pill.done {
     background: var(--green-bg);
@@ -716,17 +735,6 @@
     display: flex;
     color: var(--ink);
     flex-shrink: 0;
-  }
-  .status-pill.busy .status-icon {
-    color: var(--amber);
-  }
-  .status-icon.spin :global(svg) {
-    animation: spin 1.1s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
   .status-text {
     font-size: 14px;
@@ -851,56 +859,84 @@
   }
 
   @media (max-width: 1100px) {
-    .side {
-      top: auto;
-      left: 16px;
-      right: 16px;
-      bottom: 16px;
-      width: auto;
-      max-height: 52%;
+    .kiosk {
+      --pad: 16px;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+      align-content: stretch;
+      gap: 14px;
+      padding: var(--pad);
+      overflow-y: auto;
+    }
+    .video {
+      /* Stacked layout scrolls, so the height cap does not apply here. */
+      width: 100%;
+      --chip-floor: 44px;
+    }
+    /* The aspect lock only matters for a live frame; give the idle prompt room. */
+    .video:not(.live) {
+      min-height: 300px;
+    }
+    .kiosk-name {
+      display: none;
+    }
+    /* The card is short on phones, so keep overlays off the product. */
+    .mini-btn {
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+    .mini-actions,
+    .top-chip {
+      top: 10px;
+    }
+    .mini-actions {
+      left: 10px;
+    }
+    .top-chip {
+      right: 10px;
+    }
+    .status-pill {
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      min-height: 34px;
+      padding: 7px 12px;
+    }
+    /* Once items are listed the basket already confirms them; reclaim the frame. */
+    .status-pill.done {
+      display: none;
     }
     .help-btn {
       height: 50px;
     }
-    .status-pill {
-      top: 16px;
-      bottom: auto;
-      left: auto;
-      right: 16px;
-      margin: 0;
-      max-width: calc(100% - 260px);
-    }
     .status-text {
       white-space: normal;
-    }
-    .mini-actions {
-      top: 56px;
-      left: 16px;
-    }
-    .top-chip {
-      top: 16px;
-      bottom: auto;
-      left: 16px;
     }
     .corner-buddy {
       display: none;
     }
     .video-overlay {
-      justify-content: flex-start;
-      padding: 14vh 24px 24px;
+      gap: 8px;
+      padding: 16px;
+    }
+    /* The card is too short for the speech bubble; the title and sub already explain. */
+    .video-overlay :global(.bubble) {
+      display: none;
+    }
+    .video-title {
+      font-size: 19px;
     }
     .chat-pop {
       left: 16px;
       right: 16px;
-      bottom: 76px;
+      bottom: 16px;
       width: auto;
       height: 420px;
-      max-height: calc(100% - 190px);
+      max-height: calc(100% - 32px);
     }
   }
   @media (max-width: 640px) {
     .status-pill {
-      max-width: calc(100% - 210px);
       padding: 8px 14px;
     }
     .status-text {

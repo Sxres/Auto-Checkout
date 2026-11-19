@@ -50,5 +50,17 @@
     <rect x="17" y="32" width="30" height="13" fill-opacity="0.22" />
   {:else if kind === 'banana'}
     <path d="M14 20c0 20 14 32 34 30 2 0 3-3 1-4-17 0-29-10-30-26 0-3-5-3-5 0z" />
+  {:else if kind === 'can'}
+    <path d="M20 14h24l2 5v35a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V19z" />
+    <ellipse cx="32" cy="14" rx="12" ry="4" fill-opacity="0.3" />
+    <rect x="18" y="30" width="28" height="12" fill-opacity="0.22" />
+  {:else if kind === 'tub'}
+    <rect x="14" y="13" width="36" height="9" rx="3" />
+    <path d="M17 22h30l-3 32a4 4 0 0 1-4 4H24a4 4 0 0 1-4-4z" />
+    <rect x="20" y="32" width="24" height="12" fill-opacity="0.22" />
+  {:else if kind === 'jar'}
+    <rect x="18" y="8" width="28" height="9" rx="3" />
+    <path d="M20 17h24c2 4 4 7 4 12v25a5 5 0 0 1-5 5H21a5 5 0 0 1-5-5V29c0-5 2-8 4-12z" />
+    <rect x="16" y="32" width="32" height="14" fill-opacity="0.22" />
   {/if}
 </svg>
