@@ -1,6 +1,6 @@
 # The model only knows numbers (0, 1, 2, 3). This turns those numbers into real products
-# with a name and a price. Keep the numbers in the same order ml/scripts/prepare_dataset.py
-# used when it built the training data, or every product gets the wrong label.
+# with a name and a price. The training data takes its class IDs from this catalog too
+# (ml/scripts/dataset.py): give a new product the next unused class_id, and never reuse or reorder them.
 
 import json
 from functools import lru_cache

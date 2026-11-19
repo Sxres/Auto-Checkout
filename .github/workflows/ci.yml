@@ -22,6 +22,7 @@ jobs:
       - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run python -m pytest
+      - run: uv run python -m pytest ../ml/tests  # annotator pipeline, with a fake detector and mocked S3
 
   frontend:
     runs-on: ubuntu-latest
