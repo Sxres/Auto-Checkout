@@ -3,6 +3,7 @@
   import ProductArt from '../../lib/ProductArt.svelte'
   import Modal from '../../lib/Modal.svelte'
   import PageHead from './PageHead.svelte'
+  import CaptureWizard from './CaptureWizard.svelte'
   import { app, toast } from '../../lib/state.svelte.js'
   import { CATEGORIES } from '../../lib/data.js'
 
@@ -13,6 +14,7 @@
   let menuSku = $state(null)
   let addOpen = $state(false)
   let imagesSku = $state(null)
+  let captureProduct = $state(null)
   let newName = $state('')
   let newCategory = $state(CATEGORIES[0])
 
@@ -107,12 +109,12 @@
     })
   }
 
-  function addPhotos() {
-    if (!imagesProduct) return
-    imagesProduct.photos += 12
-    if (imagesProduct.photos >= 20 && imagesProduct.status === 'Needs images') {
-      imagesProduct.status = 'Ready'
-    }
+  function captureDone(frames) {
+    if (!captureProduct) return
+    // "photos" now counts annotated training frames produced by the capture session.
+    captureProduct.photos += frames
+    captureProduct.status = 'Ready'
+    toast(`Recorded 7 clips for “${captureProduct.name}” — uploaded and annotated.`)
   }
 
   function openImages(sku) {
@@ -260,8 +262,8 @@
   <Modal title="Manage images" onclose={() => (imagesSku = null)}>
     {#snippet footer()}
       <button class="btn-line modal-btn" onclick={() => (imagesSku = null)}>Done</button>
-      <button class="btn-red modal-btn" onclick={addPhotos}>
-        <Icon name="upload" size={15} /> Add 12 photos
+      <button class="btn-red modal-btn" onclick={() => { captureProduct = imagesProduct; imagesSku = null }}>
+        <Icon name="video" size={15} /> Start guided capture
       </button>
     {/snippet}
     <label class="form-label" for="img-prod">Product</label>
@@ -278,12 +280,16 @@
       <div>
         <p class="img-count">{imagesProduct.photos} photos</p>
         <p class="img-note">
-          {imagesProduct.status === 'Ready' ? 'Ready to recognize.' : 'Add at least 20 photos to make this product ready.'}
+          {imagesProduct.status === 'Ready' ? 'Ready to recognize.' : 'Record a guided video session to make this product ready.'}
         </p>
       </div>
       <span class="pill {imagesProduct.status === 'Ready' ? 'pill-green' : 'pill-amber'} img-badge">{imagesProduct.status}</span>
     </div>
   </Modal>
+{/if}
+
+{#if captureProduct}
+  <CaptureWizard product={captureProduct} onclose={() => (captureProduct = null)} ondone={captureDone} />
 {/if}
 
 <style>
