@@ -32,7 +32,8 @@ def model_path() -> Path:
 
 
 def conf_threshold() -> float:
-    return float(os.environ.get("AVC_CONF_THRESHOLD", "0.25"))
+    # High enough to drop spurious boxes on non-products; close-up product scans score ~0.45+.
+    return float(os.environ.get("AVC_CONF_THRESHOLD", "0.35"))
 
 
 class YoloPredictor:

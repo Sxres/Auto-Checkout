@@ -163,9 +163,9 @@ const SCAN_ERRORS = {
 }
 
 // Mirrors ml/scripts/evaluate.py swipe scoring: each frame's top box adds its confidence
-// to its class, and the highest total wins. Lower VOTE_TO_ADD charges sooner but leans
-// on fewer agreeing frames.
-const VOTE_TO_ADD = 1.5
+// to its class, and the highest total wins. Higher VOTE_TO_ADD demands more sustained,
+// confident agreement before charging, so a fleeting false positive doesn't ring up.
+const VOTE_TO_ADD = 2.5
 // Time-based, not frame-count-based, so re-arming does not speed up with the poll rate
 // and a brief detection dropout cannot charge the same item twice.
 const REARM_EMPTY_MS = 450
