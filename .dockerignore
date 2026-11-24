@@ -10,3 +10,4 @@
 docs
 ml
 !ml/scripts/annotate.py
+!ml/scripts/store.py

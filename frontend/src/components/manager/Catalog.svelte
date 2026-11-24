@@ -6,6 +6,9 @@
   import CaptureWizard from './CaptureWizard.svelte'
   import { app, toast } from '../../lib/state.svelte.js'
   import { CATEGORIES } from '../../lib/data.js'
+  import { addProduct as apiAddProduct, editProduct as apiEditProduct, fetchProducts } from '../../lib/api.js'
+
+  const CAPTURE_URL = import.meta.env.VITE_CAPTURE_API_URL
 
   let search = $state('')
   let category = $state('All categories')
@@ -13,16 +16,20 @@
   let page = $state(0)
   let menuSku = $state(null)
   let addOpen = $state(false)
+  let editSku = $state(null)
   let imagesSku = $state(null)
   let captureProduct = $state(null)
   let newName = $state('')
   let newCategory = $state(CATEGORIES[0])
+  let newPrice = $state('')
+  let saving = $state(false)
 
   const thumbBg = { chip: 'var(--chip)', beige: 'var(--beige)', green: 'var(--green-bg)', amber: 'var(--amber-bg)' }
   const artFor = { Dairy: 'milk', 'Dairy alternatives': 'milk', Produce: 'apple', Drinks: 'water', Snacks: 'bar' }
 
-  const readyCount = $derived(app.products.filter((p) => p.status === 'Ready').length)
-  const needCount = $derived(app.products.filter((p) => p.status === 'Needs images').length)
+  const liveProducts = $derived(app.products.filter((p) => p.status !== 'Retired'))
+  const readyCount = $derived(liveProducts.filter((p) => p.status === 'Ready').length)
+  const needCount = $derived(liveProducts.filter((p) => p.status === 'Needs images').length)
   const categoryCount = $derived(new Set(app.products.map((p) => p.category)).size)
   const filtered = $derived(
     app.products.filter((p) => {
@@ -36,6 +43,8 @@
   const pages = $derived(Math.max(1, Math.ceil(filtered.length / 6)))
   const visible = $derived(filtered.slice(page * 6, page * 6 + 6))
   const imagesProduct = $derived(app.products.find((p) => p.sku === imagesSku) ?? null)
+  const editing = $derived(app.products.find((p) => p.sku === editSku) ?? null)
+  const formValid = $derived(newName.trim().length > 0 && Number(newPrice) >= 0 && newPrice !== '')
 
   const stats = $derived([
     {
@@ -79,53 +88,149 @@
     status = 'All statuses'
   }
 
-  function addProduct() {
-    const name = newName.trim()
-    if (!name) return
-    const num = app.products.length + 1
-    app.products.push({
-      sku: `PRD-${String(num).padStart(3, '0')}`,
-      name,
-      category: newCategory,
-      photos: 0,
-      status: 'Needs images',
-      art: artFor[newCategory],
-      thumb: 'amber',
-      price: 0,
-    })
+  async function refreshProducts() {
+    app.products = await fetchProducts()
+  }
+
+  function openAdd() {
     newName = ''
-    addOpen = false
-    toast(`Added “${name}” to the catalog.`)
+    newPrice = ''
+    newCategory = CATEGORIES[0]
+    addOpen = true
   }
 
-  function deleteProduct(sku) {
-    const idx = app.products.findIndex((p) => p.sku === sku)
-    if (idx === -1) return
-    const [removed] = app.products.splice(idx, 1)
+  function openEdit(sku) {
+    const p = app.products.find((x) => x.sku === sku)
+    if (!p) return
+    editSku = sku
+    newName = p.name
+    newCategory = p.category
+    newPrice = String(p.price ?? 0)
     menuSku = null
-    toast(`Removed “${removed.name}”.`, {
-      label: 'Undo',
-      run: () => app.products.splice(idx, 0, removed),
-    })
   }
 
-  function captureDone(frames) {
+  async function submitAdd() {
+    if (!formValid) return
+    const name = newName.trim()
+    const price = Number(newPrice)
+    const art = artFor[newCategory] ?? 'bar'
+    if (CAPTURE_URL) {
+      saving = true
+      try {
+        await apiAddProduct({ name, price, category: newCategory, art })
+        await refreshProducts()
+        addOpen = false
+        toast(`Added “${name}” to the catalog.`)
+      } catch (err) {
+        toast(err.message ?? 'Could not add the product.')
+      } finally {
+        saving = false
+      }
+    } else {
+      const num = app.products.length + 1
+      app.products.push({
+        sku: `PRD-${String(num).padStart(3, '0')}`,
+        name,
+        category: newCategory,
+        photos: 0,
+        status: 'Needs images',
+        art,
+        thumb: 'amber',
+        price,
+      })
+      addOpen = false
+      toast(`Added “${name}” to the catalog.`)
+    }
+  }
+
+  async function submitEdit() {
+    if (!formValid || !editing) return
+    const name = newName.trim()
+    const price = Number(newPrice)
+    const art = artFor[newCategory] ?? editing.art
+    if (CAPTURE_URL) {
+      saving = true
+      try {
+        await apiEditProduct(editing.sku, { name, price, category: newCategory, art })
+        await refreshProducts()
+        editSku = null
+        toast(`Updated “${name}”.`)
+      } catch (err) {
+        toast(err.message ?? 'Could not update the product.')
+      } finally {
+        saving = false
+      }
+    } else {
+      Object.assign(editing, { name, price, category: newCategory, art })
+      editSku = null
+      toast(`Updated “${name}”.`)
+    }
+  }
+
+  async function deleteProduct(sku) {
+    const p = app.products.find((x) => x.sku === sku)
+    if (!p) return
+    menuSku = null
+    if (CAPTURE_URL) {
+      try {
+        await apiEditProduct(sku, { retired: true })
+        await refreshProducts()
+        toast(`Retired “${p.name}”.`, {
+          label: 'Undo',
+          run: async () => {
+            await apiEditProduct(sku, { retired: false })
+            await refreshProducts()
+          },
+        })
+      } catch (err) {
+        toast(err.message ?? 'Could not retire the product.')
+      }
+    } else {
+      const idx = app.products.findIndex((x) => x.sku === sku)
+      const [removed] = app.products.splice(idx, 1)
+      toast(`Removed “${removed.name}”.`, {
+        label: 'Undo',
+        run: () => app.products.splice(idx, 0, removed),
+      })
+    }
+  }
+
+  async function restoreProduct(sku) {
+    const p = app.products.find((x) => x.sku === sku)
+    if (!p) return
+    menuSku = null
+    if (CAPTURE_URL) {
+      try {
+        await apiEditProduct(sku, { retired: false })
+        await refreshProducts()
+        toast(`Restored “${p.name}”.`)
+      } catch (err) {
+        toast(err.message ?? 'Could not restore the product.')
+      }
+    }
+  }
+
+  async function captureDone(frames) {
     if (!captureProduct) return
-    // "photos" now counts annotated training frames produced by the capture session.
-    captureProduct.photos += frames
-    captureProduct.status = 'Ready'
-    toast(`Recorded 7 clips for “${captureProduct.name}” — uploaded and annotated.`)
+    const name = captureProduct.name
+    if (CAPTURE_URL) {
+      await refreshProducts()
+    } else {
+      captureProduct.photos += frames
+      captureProduct.status = 'Ready'
+    }
+    toast(`Recorded 7 clips for “${name}” — uploaded and annotated.`)
   }
 
   function openImages(sku) {
-    imagesSku = sku ?? app.products.find((p) => p.status === 'Needs images')?.sku ?? app.products[0]?.sku ?? null
+    imagesSku = sku ?? liveProducts.find((p) => p.status === 'Needs images')?.sku ?? liveProducts[0]?.sku ?? null
     menuSku = null
   }
 </script>
 
 <div class="page">
   <PageHead title="Product catalog" subtitle="Keep the items your kiosk knows up to date.">
-    <button class="btn-red head-btn" onclick={() => (addOpen = true)}>Add product</button>
+    <button class="btn-red head-btn" onclick={openAdd}>Add product</button>
   </PageHead>
 
   <div class="stats">
@@ -158,6 +263,7 @@
           <option>All statuses</option>
           <option>Ready</option>
           <option>Needs images</option>
+          <option>Retired</option>
         </select>
         <span class="select-chev"><Icon name="chevronDown" size={15} /></span>
       </div>
@@ -186,7 +292,7 @@
           <span class="cell tnum">{p.sku}</span>
           <span class="cell col-cat">{p.category}</span>
           <span class="cell col-img tnum">{p.photos} photos</span>
-          <span class="pill row-badge {p.status === 'Ready' ? 'pill-green' : 'pill-amber'}">{p.status}</span>
+          <span class="pill row-badge {p.status === 'Ready' ? 'pill-green' : p.status === 'Retired' ? 'pill-gray' : 'pill-amber'}">{p.status}</span>
           <span class="actions-cell">
             <button
               class="dots"
@@ -197,12 +303,21 @@
             </button>
             {#if menuSku === p.sku}
               <div class="row-menu" role="menu">
-                <button class="menu-item" role="menuitem" onclick={() => openImages(p.sku)}>
-                  <Icon name="image" size={14} /> Manage images
+                <button class="menu-item" role="menuitem" onclick={() => openEdit(p.sku)}>
+                  <Icon name="gear" size={14} /> Edit product
                 </button>
-                <button class="menu-item danger" role="menuitem" onclick={() => deleteProduct(p.sku)}>
-                  <Icon name="x" size={14} /> Delete product
-                </button>
+                {#if p.status !== 'Retired'}
+                  <button class="menu-item" role="menuitem" onclick={() => openImages(p.sku)}>
+                    <Icon name="image" size={14} /> Manage images
+                  </button>
+                  <button class="menu-item danger" role="menuitem" onclick={() => deleteProduct(p.sku)}>
+                    <Icon name="x" size={14} /> Retire product
+                  </button>
+                {:else}
+                  <button class="menu-item" role="menuitem" onclick={() => restoreProduct(p.sku)}>
+                    <Icon name="refresh" size={14} /> Restore product
+                  </button>
+                {/if}
               </div>
             {/if}
           </span>
@@ -219,7 +334,7 @@
         <span class="icon-chip"><Icon name="box" size={18} /></span>
         <p class="empty-title">No products yet.</p>
         <p class="empty-sub">Add your first product so the kiosk can start recognizing items.</p>
-        <button class="btn-red empty-btn" onclick={() => (addOpen = true)}>Add product</button>
+        <button class="btn-red empty-btn" onclick={openAdd}>Add product</button>
       </div>
     {:else if filtered.length === 0}
       <div class="empty-state table-empty">
@@ -243,10 +358,12 @@
   <Modal title="Add product" onclose={() => (addOpen = false)}>
     {#snippet footer()}
       <button class="btn-line modal-btn" onclick={() => (addOpen = false)}>Cancel</button>
-      <button class="btn-red modal-btn" disabled={!newName.trim()} onclick={addProduct}>Add product</button>
+      <button class="btn-red modal-btn" disabled={!formValid || saving} onclick={submitAdd}>Add product</button>
     {/snippet}
     <label class="form-label" for="np-name">Product name</label>
     <input id="np-name" class="field form-input" type="text" placeholder="e.g. Sparkling water 500 mL" bind:value={newName} />
+    <label class="form-label" for="np-price">Price (USD)</label>
+    <input id="np-price" class="field form-input" type="number" min="0" step="0.01" placeholder="e.g. 1.99" bind:value={newPrice} />
     <label class="form-label" for="np-cat">Category</label>
     <div class="select-wrap form-select">
       <select id="np-cat" class="field select" bind:value={newCategory}>
@@ -258,18 +375,39 @@
   </Modal>
 {/if}
 
+{#if editing}
+  <Modal title="Edit product" onclose={() => (editSku = null)}>
+    {#snippet footer()}
+      <button class="btn-line modal-btn" onclick={() => (editSku = null)}>Cancel</button>
+      <button class="btn-red modal-btn" disabled={!formValid || saving} onclick={submitEdit}>Save changes</button>
+    {/snippet}
+    <label class="form-label" for="ep-name">Product name</label>
+    <input id="ep-name" class="field form-input" type="text" bind:value={newName} />
+    <label class="form-label" for="ep-price">Price (USD)</label>
+    <input id="ep-price" class="field form-input" type="number" min="0" step="0.01" bind:value={newPrice} />
+    <label class="form-label" for="ep-cat">Category</label>
+    <div class="select-wrap form-select">
+      <select id="ep-cat" class="field select" bind:value={newCategory}>
+        {#each CATEGORIES as c}<option>{c}</option>{/each}
+      </select>
+      <span class="select-chev"><Icon name="chevronDown" size={15} /></span>
+    </div>
+    <p class="form-note">SKU {editing.sku} and its class ID stay the same.</p>
+  </Modal>
+{/if}
+
 {#if imagesProduct}
   <Modal title="Manage images" onclose={() => (imagesSku = null)}>
     {#snippet footer()}
       <button class="btn-line modal-btn" onclick={() => (imagesSku = null)}>Done</button>
-      <button class="btn-red modal-btn" onclick={() => { captureProduct = imagesProduct; imagesSku = null }}>
+      <button class="btn-red modal-btn" disabled={imagesProduct.status === 'Retired'} onclick={() => { captureProduct = imagesProduct; imagesSku = null }}>
         <Icon name="video" size={15} /> Start guided capture
       </button>
     {/snippet}
     <label class="form-label" for="img-prod">Product</label>
     <div class="select-wrap form-select">
       <select id="img-prod" class="field select" bind:value={imagesSku}>
-        {#each app.products as p}<option value={p.sku}>{p.name}</option>{/each}
+        {#each liveProducts as p}<option value={p.sku}>{p.name}</option>{/each}
       </select>
       <span class="select-chev"><Icon name="chevronDown" size={15} /></span>
     </div>
@@ -283,7 +421,7 @@
           {imagesProduct.status === 'Ready' ? 'Ready to recognize.' : 'Record a guided video session to make this product ready.'}
         </p>
       </div>
-      <span class="pill {imagesProduct.status === 'Ready' ? 'pill-green' : 'pill-amber'} img-badge">{imagesProduct.status}</span>
+      <span class="pill {imagesProduct.status === 'Ready' ? 'pill-green' : imagesProduct.status === 'Retired' ? 'pill-gray' : 'pill-amber'} img-badge">{imagesProduct.status}</span>
     </div>
   </Modal>
 {/if}

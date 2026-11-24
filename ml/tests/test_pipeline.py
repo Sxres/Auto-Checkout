@@ -158,3 +158,19 @@ def test_import_turns_fooddata_into_captures(store, tmp_path):
 
     import_fooddata.main(src, f"s3://{store.bucket}" if store.bucket else str(store.dir))
     assert len([k for k in store.keys("captures/") if k.endswith("/capture.json")]) == 4
+
+
+def test_classes_reads_store_catalog_including_retired(store):
+    catalog = {
+        "version": "1.0.0",
+        "products": [
+            {"class_id": 0, "sku": "COKE-330", "retired": False},
+            {"class_id": 1, "sku": "PRD-001", "retired": True},
+        ],
+    }
+    store.put("catalog.json", json.dumps(catalog).encode())
+    assert classes(store) == {"0": "COKE-330", "1": "PRD-001"}  # a retired product keeps its ID
+
+
+def test_classes_falls_back_to_repo_without_store_catalog(store):
+    assert classes(store) == {"0": "COKE-330", "1": "HEINZ-570", "2": "BJ-473", "3": "NUT-750"}

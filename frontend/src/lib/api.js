@@ -3,6 +3,7 @@
 // contract the UI consumes; keep them stable when wiring real data.
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const CAPTURE_URL = import.meta.env.VITE_CAPTURE_API_URL
 
 export class RecognizeError extends Error {
   constructor(code, message) {
@@ -12,9 +13,35 @@ export class RecognizeError extends Error {
 }
 
 export async function fetchProducts() {
-  // [{ sku, name, category, photos, status: 'Ready' | 'Needs images', art, thumb, price }]
-  return []
+  // [{ sku, name, category, photos, status, retired, art, thumb, price }] — status/photos derived server-side (#20).
+  // Unset capture API: keep the in-browser mock (the wizard seeds PRD-xxx products).
+  if (!CAPTURE_URL) return []
+  try {
+    const response = await fetch(`${CAPTURE_URL}/products`)
+    if (!response.ok) return []
+    const products = await response.json()
+    return products.map((p) => ({ ...p, thumb: p.thumb ?? 'beige' }))
+  } catch {
+    return []
+  }
 }
+
+async function productRequest(method, path, body) {
+  const response = await fetch(`${CAPTURE_URL}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    const detail = payload?.detail
+    throw new RecognizeError(detail?.code ?? 'unknown', detail?.message ?? 'Product request failed.')
+  }
+  return payload
+}
+
+export const addProduct = (product) => productRequest('POST', '/products', product)
+export const editProduct = (sku, changes) => productRequest('PATCH', `/products/${encodeURIComponent(sku)}`, changes)
 
 export async function fetchReviewQueue() {
   // [{ id, capture, label, suggested, match, time, art }]

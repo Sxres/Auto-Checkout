@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir torch==2.11.0 torchvision==0.26.0 --index-url htt
 
 # Lambda's filesystem is read-only outside /tmp
 ENV YOLO_CONFIG_DIR=/tmp/Ultralytics
-COPY ml/scripts/annotate.py ${LAMBDA_TASK_ROOT}/
+COPY ml/scripts/store.py ml/scripts/annotate.py ${LAMBDA_TASK_ROOT}/
 
 # Save the shape prompts into the weights here, so the final image ships 71 MB of weights
 # and not YOLOE's 600 MB text encoder

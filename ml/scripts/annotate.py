@@ -19,11 +19,9 @@ import io
 import json
 import math
 import os
-import shutil
 import sys
 import tempfile
 import uuid
-from datetime import UTC, datetime
 from functools import cache
 from pathlib import Path
 from urllib.parse import unquote_plus
@@ -31,6 +29,7 @@ from urllib.parse import unquote_plus
 import cv2
 import numpy as np
 from PIL import Image, ImageOps
+from store import Store, now
 
 FPS = 3  # closer frames are near-duplicates
 SIZE = (1280, 720)  # every image ends up landscape at the video frame size
@@ -39,59 +38,6 @@ SIZE = (1280, 720)  # every image ends up landscape at the video frame size
 LABEL_PROMPTS = ["can", "bottle", "jar", "tub", "container", "cup"]
 WEIGHTS = Path(os.environ.get("ANNOTATOR_WEIGHTS", "yoloe-11l-shapes.pt"))
 KINDS = ("train", "val", "swipe")
-
-
-class Store:
-    """The S3 layout under a local directory or an S3 bucket ("s3://bucket"), by object key."""
-
-    def __init__(self, root: str):
-        self.bucket = root.removeprefix("s3://").strip("/") if root.startswith("s3://") else None
-        if self.bucket:
-            import boto3
-
-            self.s3 = boto3.client("s3")
-        else:
-            self.dir = Path(root)
-
-    def get(self, key: str) -> bytes:
-        if self.bucket:
-            return self.s3.get_object(Bucket=self.bucket, Key=key)["Body"].read()
-        return (self.dir / key).read_bytes()
-
-    def put(self, key: str, data: bytes) -> None:
-        if self.bucket:
-            self.s3.put_object(Bucket=self.bucket, Key=key, Body=data)
-        else:
-            (self.dir / key).parent.mkdir(parents=True, exist_ok=True)
-            (self.dir / key).write_bytes(data)
-
-    def keys(self, prefix: str) -> list[str]:
-        if self.bucket:
-            pages = self.s3.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=prefix)
-            return [o["Key"] for page in pages for o in page.get("Contents", [])]
-        files = (p.relative_to(self.dir).as_posix() for p in (self.dir / prefix.rpartition("/")[0]).rglob("*"))
-        return sorted(k for k in files if k.startswith(prefix) and (self.dir / k).is_file())
-
-    def exists(self, key: str) -> bool:
-        return key in self.keys(key)
-
-    def download(self, key: str, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if self.bucket:
-            self.s3.download_file(self.bucket, key, str(path))
-        else:
-            shutil.copyfile(self.dir / key, path)
-
-    def upload(self, path: Path, key: str) -> None:
-        if self.bucket:
-            self.s3.upload_file(str(path), self.bucket, key)
-        else:
-            (self.dir / key).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(path, self.dir / key)
-
-
-def now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def frames(video: Path, fps: float = FPS):

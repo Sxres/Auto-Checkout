@@ -1,0 +1,146 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Auto Vision Checkout capture stack (issue #14): one S3 bucket, the capture API
+  (FastAPI on Lambda behind an HTTP API via Lambda Web Adapter), and the #12 annotator
+  (Lambda container triggered by raw/ uploads). Recognition (#21) and retrain (#16) add
+  to this stack later.
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Globally unique S3 bucket name for captures, datasets, and models. Set in samconfig.toml.
+    AllowedPattern: "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+  CorsOrigins:
+    Type: String
+    Default: "http://localhost:5173,http://127.0.0.1:5173"
+    Description: Comma-separated console origins allowed by the API (AVC_CORS_ORIGINS) and the bucket POST CORS.
+
+Resources:
+  CaptureBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    DependsOn: AnnotatorInvokePermission
+    Properties:
+      BucketName: !Ref BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [POST]
+            AllowedOrigins: !Split [",", !Ref CorsOrigins]
+            AllowedHeaders: ["*"]
+            MaxAge: 3000
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt AnnotatorFunction.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: raw/
+
+  AnnotatorFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      Dockerfile: infra/annotator.Dockerfile
+      DockerContext: ..
+    Properties:
+      PackageType: Image
+      Architectures: [x86_64]
+      # This account caps Lambda memory at 3008 MB (issue #14: run at 3 GB, ~1.6 min/video).
+      MemorySize: 3008
+      Timeout: 900
+      Environment:
+        Variables:
+          ANNOTATOR_IMAGE: !Sub "${AWS::StackName}-annotator"
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: [s3:GetObject]
+              Resource:
+                - !Sub "arn:aws:s3:::${BucketName}/raw/*"
+                - !Sub "arn:aws:s3:::${BucketName}/captures/*"
+            - Effect: Allow
+              Action: [s3:ListBucket]
+              Resource: !Sub "arn:aws:s3:::${BucketName}"
+              Condition:
+                StringLike:
+                  s3:prefix: ["raw/*", "captures/*"]
+            - Effect: Allow
+              Action: [s3:PutObject]
+              Resource: !Sub "arn:aws:s3:::${BucketName}/captures/*"
+
+  AnnotatorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AnnotatorFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:aws:s3:::${BucketName}"
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # CORS is handled by the app (AVC_CORS_ORIGINS); no gateway CORS to avoid duplicate headers.
+      StageName: $default
+
+  CaptureApiFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      Dockerfile: infra/api.Dockerfile
+      DockerContext: ..
+    Properties:
+      PackageType: Image
+      Architectures: [x86_64]
+      MemorySize: 1024
+      Timeout: 30
+      Environment:
+        Variables:
+          AVC_STORE: !Sub "s3://${BucketName}"
+          AVC_CORS_ORIGINS: !Ref CorsOrigins
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: [s3:GetObject]
+              Resource: !Sub "arn:aws:s3:::${BucketName}/*"
+            - Effect: Allow
+              Action: [s3:ListBucket]
+              Resource: !Sub "arn:aws:s3:::${BucketName}"
+            - Effect: Allow
+              Action: [s3:PutObject]
+              Resource:
+                - !Sub "arn:aws:s3:::${BucketName}/captures/*"
+                - !Sub "arn:aws:s3:::${BucketName}/raw/*"
+                - !Sub "arn:aws:s3:::${BucketName}/catalog.json"
+      Events:
+        Proxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+        Root:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /
+            Method: ANY
+
+Outputs:
+  ApiUrl:
+    Description: Capture API base URL — set frontend VITE_CAPTURE_API_URL to this.
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  BucketName:
+    Description: Capture bucket (retained on sam delete).
+    Value: !Ref CaptureBucket
