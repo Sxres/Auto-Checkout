@@ -9,6 +9,8 @@ from typing import Protocol
 
 from PIL import Image
 
+from .catalog import reset_catalog
+
 
 # Raised when there's no model to use: the weights file is missing, or the ML libraries
 # aren't installed. The API catches it and says "recognition is unavailable" instead of crashing.
@@ -81,6 +83,7 @@ def get_predictor() -> Predictor:
     if _predictor is None or _predictor_key != key:
         _predictor = YoloPredictor(model_path(), conf_threshold())
         _predictor_key = key
+        reset_catalog()  # a new model may know a different catalog (#20)
     return _predictor
 
 
@@ -88,3 +91,4 @@ def reset_predictor() -> None:
     global _predictor, _predictor_key
     _predictor = None
     _predictor_key = None
+    reset_catalog()

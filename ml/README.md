@@ -18,7 +18,7 @@ The data isn't in Git. Get it from the team Google Drive: the raw captures go in
 
 ## Annotation pipeline
 
-Turns an uploaded product video into a train-ready, annotated YOLO dataset with no hand labelling (#12). The capture UI, API, and AWS deploy are #14; the retrain job is #16.
+Turns an uploaded product video into a train-ready, annotated YOLO dataset with no hand labelling (#12). The capture UI (#18), the capture API, and the AWS deploy (#14) are implemented in `backend/app/captures.py` and `infra/template.yaml`; the retrain job is #16.
 
 ```text
 manager console ── POST /captures ──▶ API (Lambda) ── presigned POST ──▶ browser uploads to S3 raw/
@@ -31,6 +31,7 @@ One S3 bucket holds everything, and a capture's status comes from which objects 
 ### S3 layout
 
 ```text
+catalog.json                           the product catalog (#20), seeded from backend/app/catalog.json
 raw/{capture_id}/source.<ext>          uploaded video
 captures/{capture_id}/capture.json     written by the API
 captures/{capture_id}/images/*.jpg     sampled frames, 1280x720 (train and val only)
@@ -52,14 +53,21 @@ datasets/{version}/manifest.json
 
 `counts` holds labelled frames for train and val, clips for swipe. A swipe manifest has `"labelled": 0`; its `sampled` is the number of 3 fps frames the clip decoded to.
 
-API contract (implemented in #14):
+API contract (`backend/app/captures.py` #14, `backend/app/products.py` #20):
 
 ```text
-GET  /products          → the products in backend/app/catalog.json
-POST /captures          {sku, kind} → 201 {capture_id, upload: {url, fields, expires_in}}   (sku must be in the catalog)
-GET  /captures/{id}     → {capture_id, sku, kind, status, frames}
-GET  /captures?sku=     → that product's captures
+GET    /products        → every product with derived status and photos (from catalog.json)
+POST   /products        {name, price, category, art} → 201 product (assigns class_id and SKU PRD-{id:03d})
+PATCH  /products/{sku}  {name?, price?, category?, art?, retired?} → 200 product
+POST   /captures        {sku, kind} → 201 {capture_id, upload: {url, fields, expires_in}}   (sku must be live in the catalog)
+GET    /captures/{id}   → {capture_id, sku, kind, status, frames}
+GET    /captures?sku=   → that product's captures
 ```
+
+`catalog.json` at the store root is the source of truth (#20); the repo `backend/app/catalog.json` is only the
+local-dev seed. Seed it once with `uv run python ml/scripts/seed_catalog.py ROOT` (writes only if absent).
+Product `status` is derived: `Retired` if retired, else `Ready` with a ready `train` capture, else `Needs images`;
+`photos` is the labelled frames of its ready `train` and `val` captures. `POST /captures` refuses unknown and retired SKUs.
 
 `kind` is `train`, `val`, or `swipe`. `status` is `awaiting_upload` (no video yet), `processing` (video, no manifest), or `ready` (manifest written). A failed run stays `processing`; its error is in the logs.
 
@@ -207,6 +215,19 @@ A product name describes the brand, not the thing in the hand; the shape word do
 | 2026-11-18 (`infra/annotator.Dockerfile`) | 10 GB, 6 vCPU | 2.79 GB | 43–68 s, 93 sampled / 90 labelled | – | 0.85 GB |
 
 Model load takes about 2 s, and starting a container and loading the model about 6 s. The container's boxes match the GPU run on the same video: the same 90 frames, every box at IoU ≥ 0.999. A 6-frame swipe clip takes 1 s and writes only its manifest. All of this is far inside Lambda's 15 minute limit, at about US$0.01 per video at 10 GB. A GPU would need a SageMaker job or an EC2 instance that takes minutes to start or costs money while idle, to save about a minute per video, so the annotator stays on CPU Lambda unless a video needs more than 15 minutes, more than 10 GB, or a GPU.
+
+### First deploy measurements (#14)
+
+To be recorded on the first real Lambda deploy (the local Docker numbers above imitate Lambda's
+limits; Lambda's own CPUs may be slower). Measure the annotator's cold start (first invocation
+after a deploy and after being idle), time per 30 s video, and peak memory from CloudWatch Logs
+and the invocation reports. If the account caps Lambda memory at 3 GB, run at 3 GB (about
+1.6 min per video) and note it here. This account (405145778116) caps Lambda at 3008 MB, so the
+annotator runs at 3008 MB.
+
+| Date | Memory | Cold start (after deploy / after idle) | Time per 30 s video | Peak memory |
+| --- | --- | --- | --- | --- |
+| _pending first deploy_ | | | | |
 
 ## Dataset v4 (`datasets/food/`, hand-checked)
 

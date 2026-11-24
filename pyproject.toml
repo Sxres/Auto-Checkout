@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Barcode-free self-checkout kiosk for grocery stores, powered by computer vision."
 requires-python = ">=3.12"
 dependencies = [
+    "boto3>=1.35,<2",
     "fastapi>=0.115,<1",
     "pillow>=11,<14",
     "python-multipart>=0.0.20,<1",
@@ -13,7 +14,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     # The annotator's light dependencies (ml/scripts/annotate.py), so CI can test it
-    "boto3>=1.35,<2",
     "httpx>=0.28,<1",
     "moto[s3]>=5,<6",
     "opencv-python-headless>=4.10",

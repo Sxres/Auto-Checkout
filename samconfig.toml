@@ -1,0 +1,18 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "auto-checkout"
+region = "us-east-2"
+resolve_image_repos = true
+resolve_s3 = true
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+# BucketName must be globally unique across all of AWS — change this before deploying.
+parameter_overrides = "BucketName=autocheck-foodbucket"
+
+[default.build.parameters]
+template_file = "infra/template.yaml"
+
+[default.delete.parameters]
+stack_name = "auto-checkout"
+region = "us-east-2"

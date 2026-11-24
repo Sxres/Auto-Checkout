@@ -21,9 +21,12 @@ from annotate import KINDS, Store
 CATALOG = Path(__file__).resolve().parents[2] / "backend" / "app" / "catalog.json"
 
 
-def classes() -> dict[str, str]:
-    """Class ID -> SKU for every product in the catalog, so IDs match /recognize."""
-    products = sorted(json.loads(CATALOG.read_text(encoding="utf-8"))["products"], key=lambda p: p["class_id"])
+def classes(store: Store | None = None) -> dict[str, str]:
+    """Class ID -> SKU for every product (retired included), so IDs match /recognize.
+    Reads the store's catalog.json when present, else the repo seed (#20)."""
+    data, _ = store.get_with_etag("catalog.json") if store is not None else (None, None)
+    doc = json.loads(data) if data is not None else json.loads(CATALOG.read_text(encoding="utf-8"))
+    products = sorted(doc["products"], key=lambda p: p["class_id"])
     ids = [p["class_id"] for p in products]
     # YOLO needs IDs 0..n-1; a retired product keeps its ID, so it must stay in the catalog
     assert ids == list(range(len(ids))), f"catalog class_id values must be 0..{len(ids) - 1}: {ids}"
@@ -31,7 +34,7 @@ def classes() -> dict[str, str]:
 
 
 def build(store: Store, version: str | None = None) -> dict:
-    names = classes()
+    names = classes(store)
     captures = {kind: [] for kind in KINDS}
     counts = {kind: {} for kind in KINDS}  # labelled frames for train and val, clips for swipe
     for key in store.keys("captures/"):
@@ -39,7 +42,7 @@ def build(store: Store, version: str | None = None) -> dict:
             continue
         m = json.loads(store.get(key))
         if m["sku"] not in names.values():
-            raise ValueError(f"Capture {m['capture_id']} has SKU {m['sku']!r}, which is not in {CATALOG.name}")
+            raise ValueError(f"Capture {m['capture_id']} has SKU {m['sku']!r}, which is not in the catalog")
         captures[m["kind"]].append(m["capture_id"])
         n = 1 if m["kind"] == "swipe" else m["frames"]["labelled"]
         counts[m["kind"]][m["sku"]] = counts[m["kind"]].get(m["sku"], 0) + n

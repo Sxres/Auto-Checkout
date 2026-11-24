@@ -15,7 +15,7 @@ The starter scaffold runs a Svelte kiosk screen and a FastAPI health endpoint. S
 | Frontend | Svelte and Vite |
 | Backend | FastAPI |
 | ML | YOLO26 and PyTorch (planned) |
-| Cloud | GCP (planned) |
+| Cloud | AWS — SAM, Lambda, S3 (capture API + annotator) |
 
 ## Run Locally
 
@@ -54,6 +54,43 @@ cd frontend
 npm ci
 npm run dev
 ```
+
+## Deploy to AWS
+
+The capture API and annotator deploy with AWS SAM from [`infra/template.yaml`](infra/template.yaml)
+into `us-east-2` (issue #14). You need the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html),
+Docker, and an account whose deploying user can use CloudFormation, IAM, S3, Lambda, ECR, API
+Gateway, and CloudWatch Logs.
+
+1. Set a globally unique `BucketName` in [`samconfig.toml`](samconfig.toml).
+2. Build the container images (needs Docker), then deploy — SAM pushes them to ECR:
+
+   ```bash
+   sam build
+   sam deploy
+   ```
+
+3. Point the console at the stack. From the stack outputs, set `frontend/.env`:
+
+   ```bash
+   VITE_CAPTURE_API_URL=<ApiUrl output>
+   ```
+
+4. Import the 4 starter products into the bucket (the upload triggers the annotator):
+
+   ```bash
+   uv run python ml/scripts/import_fooddata.py fooddata s3://<BucketName output>
+   ```
+
+`/recognize` answers 503 on the capture API — recognition runs on the GPU box (#21). Teardown
+removes everything except the bucket (captures and models are retained):
+
+```bash
+sam delete
+```
+
+See [`infra/README.md`](infra/README.md) for the stack's resources and [`ml/README.md`](ml/README.md)
+for the capture contract and the annotation pipeline.
 
 ## Project Structure
 

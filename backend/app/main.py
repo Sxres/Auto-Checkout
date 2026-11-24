@@ -9,8 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 from starlette.concurrency import run_in_threadpool
 
+from .captures import router as captures_router
 from .catalog import product_for
 from .inference import ModelUnavailable, Predictor, get_predictor
+from .products import router as products_router
 from .schemas import Detection, ImageSize, Item, RecognizeResponse
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -42,6 +44,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(captures_router)
+app.include_router(products_router)
 
 
 @app.get("/health")

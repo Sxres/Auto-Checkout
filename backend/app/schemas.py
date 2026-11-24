@@ -1,4 +1,26 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class CaptureRequest(BaseModel):
+    sku: str
+    kind: str
+
+
+class ProductCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # the server assigns sku and class_id, not the client
+    name: str = Field(min_length=1)
+    price: float = Field(ge=0)
+    category: str
+    art: str
+
+
+class ProductPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # sku and class_id are immutable
+    name: str | None = Field(default=None, min_length=1)
+    price: float | None = Field(default=None, ge=0)
+    category: str | None = None
+    art: str | None = None
+    retired: bool | None = None
 
 
 class Item(BaseModel):
